@@ -14,7 +14,7 @@ interface Message {
 }
 
 interface OscarChatProps {
-    job: Job;
+    job?: Job;
     onClose: () => void;
     accessToken: string;
 }
@@ -28,7 +28,7 @@ export const OscarChat: React.FC<OscarChatProps> = ({ job, onClose, accessToken 
     const [messages, setMessages] = useState<Message[]>([
         {
             id: 'init',
-            text: `👋 I'm ready. I have context on **${job.modelNumber || job.detectedProduct || 'this unit'}**.
+            text: `👋 I'm ready. I have context on **${job?.modelNumber || job?.detectedProduct || 'the general system'}**.
             
 Ask me about:
 *   Standard fault codes
@@ -47,14 +47,14 @@ Ask me about:
             id: `sys-${Date.now()}`,
             text: `🔄 **CONTEXT SWITCHED**
             
-Target: **${job.modelNumber || job.detectedProduct || 'Unknown Unit'}**
-Fault: "${job.engineerNotes || 'None'}"`,
+Target: **${job?.modelNumber || job?.detectedProduct || 'Unknown Unit'}**
+Fault: "${job?.engineerNotes || 'None'}"`,
             sender: 'oscar',
             timestamp: new Date()
         };
         setMessages(prev => [...prev, switchMsg]);
         setChatHistory([]); // Reset LLM history on context switch
-    }, [job.id]);
+    }, [job?.id]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -79,7 +79,7 @@ Fault: "${job.engineerNotes || 'None'}"`,
 
         // 2. Call Service
         try {
-            const result = await chatWithOscar(userText, chatHistory, job, accessToken);
+            const result = await chatWithOscar(userText, chatHistory, job || {}, accessToken);
 
             const oscarMsg: Message = {
                 id: (Date.now() + 1).toString(),

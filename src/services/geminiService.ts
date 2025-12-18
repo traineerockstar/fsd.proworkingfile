@@ -1,9 +1,11 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { GoogleGenAI, Type } from "@google/genai";
+
 import type { ProcessedData } from '../types';
 import { searchKnowledgeBase } from './googleDriveService';
 import { searchWeb } from './webSearchService';
+import { knowledgeService } from './knowledgeService';
+import { learningService } from './learningService';
 
 
 const LAYOUT_ANALYSIS_LOGIC = `
@@ -275,7 +277,7 @@ export async function chatWithOscar(
   history: { role: string; parts: { text: string }[] }[],
   jobContext: any,
   accessToken: string
-): Promise<string> {
+): Promise<{ text: string; sources?: { type: 'drive' | 'web'; name: string; link: string }[] }> {
   try {
     // 1. RAG: Search Knowledge Base
     let referenceMaterial = "";
@@ -284,6 +286,29 @@ export async function chatWithOscar(
       const docs = await searchKnowledgeBase(accessToken, message);
       if (docs.length > 0) {
         referenceMaterial = "\n\n### REFERENCE MATERIAL (FROM KNOWLEDGE BASE) ###\n" + docs.join("\n\n");
+      }
+
+
+      // 1b. Knowledge Service (Manuals)
+      if (jobContext.modelNumber || jobContext.detectedProduct) {
+        const manual = await knowledgeService.findManual(accessToken, jobContext.modelNumber || jobContext.detectedProduct);
+        if (manual) {
+          referenceMaterial += `\n\n### FOUND MANUAL: ${manual.title} ###\nURI: ${manual.url || 'Internal Drive'}`;
+        }
+      }
+
+      // 1c. Learning Service (Fault Codes)
+      if (jobContext.engineerNotes) {
+        // Simple extraction: Look for "E" or "F" followed by digits (e.g., E24, F05)
+        const codeMatch = jobContext.engineerNotes.match(/([E|F][0-9]+)/i);
+        if (codeMatch) {
+          const code = codeMatch[0].toUpperCase();
+          console.log(`Oscar: Detected Fault Code ${code}, checking Learning DB...`);
+          const fix = await learningService.findFix(accessToken, code);
+          if (fix) {
+            referenceMaterial += `\n\n### LEARNED SOLUTION FOR FAULT ${code} ###\nFix: ${fix.fix}\nSuccess Rate: ${fix.successCount} verified repairs.\nLast Verified: ${fix.lastVerified}`;
+          }
+        }
       }
     }
 
@@ -305,66 +330,35 @@ INSTRUCTIONS:
 3. Be concise and professional.
 `;
 
-    // 3. Call Gemini
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" }); // Use 1.5-flash for chat
-
-    // Convert history to Gemini format
-    const chat = model.startChat({
-      history: history.map(h => ({
-        role: h.role, // 'user' or 'model'
+    // 3. Call Gemini (Using @google/genai SDK stateless pattern)
+    // Convert history to compatible format if needed (Role: 'user' | 'model')
+    const contents = [
+      ...history.map(h => ({
+        role: h.role === 'model' ? 'model' : 'user',
         parts: h.parts
       })),
-      systemInstruction: systemPrompt,
+      { role: 'user', parts: [{ text: message }] }
+    ];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: contents,
+      config: {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+      }
     });
 
-    const result = await chat.sendMessage(message);
-    const response = result.response;
-    return response.text();
+    const text = response.text;
+    if (!text) throw new Error("No response from Gemini");
+    return {
+      text: text,
+      sources: (accessToken && referenceMaterial) ? [{ type: 'drive', name: 'Knowledge Base', link: '#' }] : []
+    };
 
   } catch (error) {
     console.error("Oscar Chat Error:", error);
-    return "I'm having trouble connecting to my knowledge base right now. Please try again.";
+    return { text: "I'm having trouble connecting to my knowledge base right now. Please try again." };
   }
 }
 
-// Import dynamically to avoid circular dependencies if possible, or just standard import at top
-// But since we are inside the same module context, we can assume standard import availability is tricky with tools. 
-// I will move the import to the top via a separate edit if needed, but for now I'll assume global scope or just add the function logic.
-// Actually, I need to add the import at the top of the file. I will do that in a separate replacement chunk or just use a full replacement if the file was small, but it's 269 lines.
-// I will just add the function here and assume I can add the import at the top later? No, I should do it properly. 
-// Since I can't do multiple discontinuous edits easily without multi_replace (which I have), I'll use that.
-// Wait, I can't use multi_replace in this turn because I am already in the middle of a thought process? No, I can call tools.
-// I will add the function here and assume the import will be added. 
-// Actually, `searchKnowledgeBase` is in `googleDriveService`. I need to import it.
 
-// Helper to clean text
-const cleanText = (text: string) => text.trim();
-
-export async function chatWithOscar(
-  message: string,
-  history: any[],
-  jobContext: any,
-  accessToken: string
-): Promise<string> {
-  try {
-    // 1. RAG: Search Knowledge Base
-    // We dynamically import here or assume it's passed? The instruction says "Update geminiService".
-    // I'll need to update imports first.
-    // For this step, I will write the function assuming `searchKnowledgeBase` is available.
-
-    // Retrieve knowledge
-    // Logic: "Before sending the prompt... call searchKnowledgeBase"
-    let knowledgeContext = "";
-    if (accessToken) {
-      // We need to import this. I'll add the import in the next tool call to be safe or use a relative import string if I could.
-      // Since I can't easily change imports at the top without reading the whole file again or blindly overwriting line 1-5, 
-      // I will assume I can add the import at the top in this same Turn? 
-      // No, I can only call one tool per "step" effectively if strictly sequential. 
-      // I'll use multi_replace to do both.
-      // Wait, I am using replace_file_content. I should use multi_replace_file_content to add import AND add function.
-      // Switching tool to multi_replace_file_content.
-      return ""; // Dummy return to satisfy thinking.
-    }
-    return "";
-  } catch (e) { return "" }
-}

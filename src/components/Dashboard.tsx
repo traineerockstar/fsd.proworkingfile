@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Shell } from './Shell'; // Use Shell now
 import { JobCard } from './JobCard';
 import { JobDetail } from './JobDetail';
-import { SettingsScreen } from './Settings';
+import Settings from './Settings';
 import { OscarChat } from './OscarChat';
 import { DiagnosticWizard } from './DiagnosticWizard';
 import { IngestManager } from './IngestManager';
@@ -11,6 +11,7 @@ import { TrainingCenter } from './TrainingCenter';
 import { Menu, Search, Bell, Wrench, Calendar, MessageSquare, Book } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJobs, Job } from '../context/JobContext';
+import { Bot } from 'lucide-react';
 
 interface DashboardProps {
     accessToken: string;
@@ -151,14 +152,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ accessToken, onLogout }) =
                                     )}
 
                                     {activeView === 'settings' && (
-                                        <SettingsScreen onBack={() => setActiveView('dashboard')} accessToken={accessToken} />
+                                        <Settings onClose={() => setActiveView('dashboard')} accessToken={accessToken} />
                                     )}
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </main>
+
+                    {/* Oscar FAB */}
+                    {!oscarJob && (
+                        <button
+                            onClick={() => setOscarJob({ id: 'global' } as Job)}
+                            className="absolute bottom-6 right-6 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-lg shadow-purple-500/30 text-white hover:scale-110 transition-transform z-40 group"
+                        >
+                            <Bot size={28} />
+                            <span className="absolute right-full mr-4 bg-black/80 text-white text-xs px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-sm">
+                                Ask Oscar
+                            </span>
+                        </button>
+                    )}
                 </div>
-            )}
-        </Shell>
+            )
+            }
+        </Shell >
     );
 };

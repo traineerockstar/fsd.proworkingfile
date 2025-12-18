@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Book, RefreshCw, Search, Download, FileText, CheckCircle2 } from 'lucide-react';
-import { knowledgeService, Manual } from '../services/knowledgeService';
+import { knowledgeService } from '../services/knowledgeService';
+import { KnowledgeItem } from '../types';
 import { listFilesInFolder } from '../services/googleDriveService';
 import { useJobs } from '../context/JobContext';
 
@@ -15,7 +16,7 @@ export const TrainingCenter: React.FC<TrainingCenterProps> = ({ accessToken, onC
     const [manuals, setManuals] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searchModel, setSearchModel] = useState('');
-    const [searchResult, setSearchResult] = useState<Manual | null>(null);
+    const [searchResult, setSearchResult] = useState<KnowledgeItem | null>(null);
     const [isSearching, setIsSearching] = useState(false);
 
     const fetchManuals = async () => {

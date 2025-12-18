@@ -4,7 +4,7 @@ import {
     ChevronLeft, MapPin, Clock, Phone, Upload,
     Sparkles, FileText, CheckCircle2, AlertTriangle, X, Scan
 } from 'lucide-react';
-import { Job } from './JobCard';
+import { Job } from '../context/JobContext';
 import { BarcodeScanner } from './BarcodeScanner';
 import { analyzeJobSheet } from '../services/geminiService';
 import { useJobs } from '../context/JobContext';

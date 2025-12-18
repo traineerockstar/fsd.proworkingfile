@@ -1,15 +1,7 @@
-
 import { findSubfolder, listFilesInFolder, findOrCreateFolder, getFileBase64 } from './googleDriveService';
+import { KnowledgeItem } from '../types';
 
 const MANUALS_FOLDER = 'MANUALS';
-
-export interface Manual {
-    id: string; // Drive File ID or Exa ID
-    title: string;
-    url?: string; // If external (Exa)
-    source: 'drive' | 'web';
-    content?: string; // Text content if extracted? Or just base64 for Gemini
-}
 
 /**
  * Knowledge Service Center
@@ -24,7 +16,7 @@ export const knowledgeService = {
     /**
      * Main entry point: Find manual for a model number
      */
-    findManual: async (accessToken: string, modelNumber: string): Promise<Manual | null> => {
+    findManual: async (accessToken: string, modelNumber: string): Promise<KnowledgeItem | null> => {
         // 1. Check Drive First
         const driveResult = await searchDriveForManual(accessToken, modelNumber);
         if (driveResult) return driveResult;
@@ -45,7 +37,7 @@ export const knowledgeService = {
     // ... Helper functions will be implemented in following steps
 };
 
-async function searchDriveForManual(accessToken: string, modelNumber: string): Promise<Manual | null> {
+async function searchDriveForManual(accessToken: string, modelNumber: string): Promise<KnowledgeItem | null> {
     try {
         const rootId = await findOrCreateFolder(accessToken);
         const manualsFolderId = await findSubfolder(accessToken, rootId, MANUALS_FOLDER);
@@ -72,7 +64,7 @@ async function searchDriveForManual(accessToken: string, modelNumber: string): P
     return null;
 }
 
-async function searchWebForManual(modelNumber: string): Promise<Manual | null> {
+async function searchWebForManual(modelNumber: string): Promise<KnowledgeItem | null> {
     if (!EXA_API_KEY) {
         console.warn("Skipping Exa Search: VITE_EXA_API_KEY not set.");
         return null;
@@ -118,7 +110,7 @@ async function searchWebForManual(modelNumber: string): Promise<Manual | null> {
     return null;
 }
 
-async function saveManualToDrive(accessToken: string, manual: Manual, modelNumber: string) {
+async function saveManualToDrive(accessToken: string, manual: KnowledgeItem, modelNumber: string) {
     try {
         const rootId = await findOrCreateFolder(accessToken);
         const manualsFolderId = await findSubfolder(accessToken, rootId, MANUALS_FOLDER);

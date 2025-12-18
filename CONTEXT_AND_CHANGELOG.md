@@ -310,3 +310,12 @@ The application is a "Field Service Data Processor". It's a web-based tool built
 *   **Summary**: "Created new UI design based on user-provided style reference."
 *   **Details**: "Implemented a modern, blue-and-white card-based layout with generic placeholders, matching the requested aesthetic."
 
+
+### 2025-12-18: Project Structure Consolidation
+*   **Summary**: "Consolidated all source code into `src/` directory and aligned with Vite best practices."
+*   **Details**:
+    *   Moved `components`, `services`, `context`, `App.tsx`, `types.ts`, and `main.tsx` into `src/`.
+    *   Deleted root-level source files to remove duplication.
+    *   Updated `index.html` entry point.
+    *   Fixed build errors in `geminiService.ts` (duplicate exports) and `Settings.tsx` (JSX syntax).
+    *   Verified application loads successfully on development server.

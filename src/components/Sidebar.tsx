@@ -1,12 +1,13 @@
 
 import React from 'react';
-import { 
-  CalendarIcon, 
-  ClockIcon, 
-  PlusIcon, 
+import {
+  CalendarIcon,
+  ClockIcon,
+  PlusIcon,
   ChatIcon,
   SidebarLeftIcon
-} from './Icons'; 
+} from './Icons';
+import { Settings } from 'lucide-react';
 
 interface SidebarProps {
   activeView: string;
@@ -16,19 +17,19 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen, onClose }) => {
-  
+
   const navItems = [
     { id: 'yesterday', label: 'Yesterday', icon: <ClockIcon /> },
     { id: 'today', label: 'Today', icon: <CalendarIcon /> },
     { id: 'tomorrow', label: 'Tomorrow', icon: <PlusIcon /> },
     { id: 'messages', label: 'Messages', icon: <ChatIcon /> },
+    { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
   ];
 
   return (
-    <aside 
-      className={`fixed left-0 top-0 h-full w-20 md:w-64 flex flex-col backdrop-blur-xl bg-black/40 border-r border-white/10 z-50 transition-transform duration-300 ease-in-out ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}
+    <aside
+      className={`fixed left-0 top-0 h-full w-20 md:w-64 flex flex-col backdrop-blur-xl bg-black/40 border-r border-white/10 z-50 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
     >
       {/* Logo Area */}
       <div className="h-20 flex items-center justify-between px-4 md:px-6 border-b border-white/5">
@@ -38,9 +39,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen
             FSD.Pro
           </span>
         </div>
-        
+
         {/* Collapse Button */}
-        <button 
+        <button
           onClick={onClose}
           className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
           title="Collapse Sidebar"
@@ -57,11 +58,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center justify-center md:justify-start p-3 md:px-4 rounded-xl transition-all duration-300 group relative overflow-hidden ${
-                isActive 
-                  ? 'bg-cyan-500/10 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.15)] border border-cyan-500/20' 
-                  : 'text-slate-500 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-              }`}
+              className={`w-full flex items-center justify-center md:justify-start p-3 md:px-4 rounded-xl transition-all duration-300 group relative overflow-hidden ${isActive
+                ? 'bg-cyan-500/10 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.15)] border border-cyan-500/20'
+                : 'text-slate-500 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+                }`}
             >
               {isActive && (
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-cyan-500 rounded-r-full shadow-[0_0_10px_#06b6d4]" />
@@ -70,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen
               <span className={`relative z-10 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
                 {item.icon}
               </span>
-              
+
               <span className={`hidden md:block ml-3 text-sm font-medium relative z-10 ${isActive ? 'text-cyan-100' : ''}`}>
                 {item.label}
               </span>

@@ -2,12 +2,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Stethoscope, AlertTriangle, ChevronRight, Activity, Wrench, CheckCircle2, XCircle } from 'lucide-react';
-import { learningService, Solution } from '../services/learningService';
+import { learningService } from '../services/learningService';
+import { FaultCode } from '../types';
 
 export const DiagnosticWizard: React.FC<{ onClose: () => void; accessToken: string }> = ({ onClose, accessToken }) => {
     const [step, setStep] = useState<'initial' | 'symptom' | 'error_code' | 'solution'>('initial');
     const [errorCode, setErrorCode] = useState('');
-    const [foundSolution, setFoundSolution] = useState<Solution | null>(null);
+    const [foundSolution, setFoundSolution] = useState<FaultCode | null>(null);
     const [isChecking, setIsChecking] = useState(false);
 
     const handleErrorCodeSubmit = async () => {

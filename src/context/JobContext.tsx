@@ -28,11 +28,27 @@ const INITIAL_JOBS: Job[] = [
     { id: '5', customerName: 'Metro Hub', address: 'Central Station Main Hall', timeSlot: '17:00 - 18:00', status: 'completed', priority: 'normal', travelTime: '5 mins' },
 ];
 
+export interface AppSettings {
+    defaultModel: string;
+    autoIngest: boolean;
+    driveFolderId?: string;
+    apiKey?: string;
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+    defaultModel: 'gemini-2.5-flash',
+    autoIngest: false,
+};
+
 interface JobContextType {
     jobs: Job[];
+    settings: AppSettings;
     updateJob: (id: string, updates: Partial<Job>) => void;
     getJob: (id: string) => Job | undefined;
     resetJobs: () => void;
+    updateSettings: (newSettings: Partial<AppSettings>) => void;
+    resetSettings: () => void;
+    accessToken: string | null;
 }
 
 const JobContext = createContext<JobContextType | undefined>(undefined);
@@ -41,6 +57,10 @@ import { saveJobToDrive, listJobsFromDrive } from '../services/googleDriveServic
 
 export const JobProvider: React.FC<{ children: ReactNode; accessToken: string | null }> = ({ children, accessToken }) => {
     const [jobs, setJobs] = useState<Job[]>(INITIAL_JOBS);
+    const [settings, setSettings] = useState<AppSettings>(() => {
+        const saved = localStorage.getItem('appSettings');
+        return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    });
     const [isLoading, setIsLoading] = useState(false);
 
     // Initial Load
@@ -89,8 +109,21 @@ export const JobProvider: React.FC<{ children: ReactNode; accessToken: string | 
         setJobs(INITIAL_JOBS);
     };
 
+    const updateSettings = (newSettings: Partial<AppSettings>) => {
+        setSettings(prev => {
+            const updated = { ...prev, ...newSettings };
+            localStorage.setItem('appSettings', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const resetSettings = () => {
+        setSettings(DEFAULT_SETTINGS);
+        localStorage.removeItem('appSettings');
+    };
+
     return (
-        <JobContext.Provider value={{ jobs, updateJob, getJob, resetJobs }}>
+        <JobContext.Provider value={{ jobs, settings, updateJob, getJob, resetJobs, updateSettings, resetSettings, accessToken }}>
             {children}
         </JobContext.Provider>
     );
@@ -103,3 +136,5 @@ export const useJobs = () => {
     }
     return context;
 };
+
+export const useJobContext = useJobs;
