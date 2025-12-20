@@ -1,94 +1,93 @@
-
 import React from 'react';
-import {
-  CalendarIcon,
-  ClockIcon,
-  PlusIcon,
-  ChatIcon,
-  SidebarLeftIcon
-} from './Icons';
-import { Settings } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { LayoutDashboard, Calendar, Settings, LogOut, CheckSquare, MessageSquare, Wrench, Menu as SidebarLeftIcon } from 'lucide-react';
 
 interface SidebarProps {
   activeView: string;
   onNavigate: (view: string) => void;
   isOpen: boolean;
   onClose: () => void;
+  onLogout: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen, onClose }) => {
-
+export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen, onClose, onLogout }) => {
   const navItems = [
-    { id: 'yesterday', label: 'Yesterday', icon: <ClockIcon /> },
-    { id: 'today', label: 'Today', icon: <CalendarIcon /> },
-    { id: 'tomorrow', label: 'Tomorrow', icon: <PlusIcon /> },
-    { id: 'messages', label: 'Messages', icon: <ChatIcon /> },
-    { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
+    { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+    { id: 'jobs', icon: <CheckSquare size={20} />, label: 'Jobs' },
+    { id: 'schedule', icon: <Calendar size={20} />, label: 'Schedule' },
+    { id: 'messages', icon: <MessageSquare size={20} />, label: 'Messages' },
+    { id: 'tools', icon: <Wrench size={20} />, label: 'Tools' },
+    { id: 'settings', icon: <Settings size={20} />, label: 'Settings' },
   ];
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full w-20 md:w-64 flex flex-col backdrop-blur-xl bg-black/40 border-r border-white/10 z-50 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+      className={`fixed md:relative left-0 top-0 h-full w-72 flex flex-col z-50 md:z-auto transition-transform duration-300 ease-out md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} bg-white border-r border-slate-200 shadow-xl md:shadow-none`}
     >
-      {/* Logo Area */}
-      <div className="h-20 flex items-center justify-between px-4 md:px-6 border-b border-white/5">
-        <div className="flex items-center">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(6,182,212,0.5)] flex-shrink-0" />
-          <span className="hidden md:block ml-3 font-bold text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-            FSD.Pro
-          </span>
+      <div className="flex flex-col h-full bg-white px-4 py-8">
+
+        {/* Brand Header */}
+        <div className="flex items-center justify-between mb-10 pl-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-xl">
+              S
+            </div>
+            <h1 className="text-xl font-heading font-bold text-slate-800 tracking-tight">
+              Service<span className="text-blue-500">HQ</span>
+            </h1>
+          </div>
+          <button onClick={onClose} className="md:hidden p-2 text-slate-400 hover:text-slate-600">
+            <SidebarLeftIcon />
+          </button>
         </div>
 
-        {/* Collapse Button */}
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-          title="Collapse Sidebar"
-        >
-          <SidebarLeftIcon />
-        </button>
-      </div>
+        {/* Navigation */}
+        <nav className="flex-1 space-y-2">
+          {navItems.map((item) => {
+            const isActive = activeView === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onNavigate(item.id)}
+                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-200 font-medium group relative ${isActive
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  }`}
+              >
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-lg" />
+                )}
 
-      {/* Navigation Items */}
-      <nav className="flex-1 py-8 space-y-2 px-2 md:px-4">
-        {navItems.map((item) => {
-          const isActive = activeView === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`w-full flex items-center justify-center md:justify-start p-3 md:px-4 rounded-xl transition-all duration-300 group relative overflow-hidden ${isActive
-                ? 'bg-cyan-500/10 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.15)] border border-cyan-500/20'
-                : 'text-slate-500 hover:text-slate-200 hover:bg-white/5 border border-transparent'
-                }`}
-            >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-cyan-500 rounded-r-full shadow-[0_0_10px_#06b6d4]" />
-              )}
+                <span className={`relative z-10 transition-colors duration-200 ${isActive ? 'text-blue-500' : 'group-hover:text-slate-600'}`}>
+                  {item.icon}
+                </span>
+                <span className="relative z-10 text-sm">
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
 
-              <span className={`relative z-10 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
-                {item.icon}
-              </span>
-
-              <span className={`hidden md:block ml-3 text-sm font-medium relative z-10 ${isActive ? 'text-cyan-100' : ''}`}>
-                {item.label}
-              </span>
-
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-500/5 to-cyan-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* User Profile */}
-      <div className="p-4 border-t border-white/5">
-        <div className="flex items-center justify-center md:justify-start gap-3 p-2 rounded-xl bg-white/5 border border-white/5">
-          <div className="w-8 h-8 rounded-full bg-slate-700 border border-white/10" />
-          <div className="hidden md:block">
-            <p className="text-xs font-bold text-slate-300">Matt Engineer</p>
-            <p className="text-[10px] text-cyan-500">Online</p>
+        {/* Footer User Profile */}
+        <div className="mt-auto pt-6 border-t border-slate-100">
+          <div className="flex items-center gap-3 px-4 mb-4">
+            <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden">
+              {/* Placeholder Avatar */}
+              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-bold text-slate-800 truncate">Alex Walker</h4>
+              <p className="text-xs text-slate-500 truncate">Senior Technician</p>
+            </div>
           </div>
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors text-sm font-medium"
+          >
+            <LogOut size={18} />
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
     </aside>

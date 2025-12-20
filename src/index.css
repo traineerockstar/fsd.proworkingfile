@@ -1,7 +1,66 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
-    body {
-        @apply bg-slate-950 text-slate-50 antialiased;
-    }
+  :root {
+    --font-heading: 'Outfit', sans-serif;
+    --font-body: 'Inter', sans-serif;
+
+    /* ServiceHQ Color Palette */
+    --color-primary: #00A0E9;
+    /* Service Blue */
+    --color-bg: #F4F6F8;
+    /* Light Slate Background */
+    --color-card: #FFFFFF;
+    /* Pure White */
+    --color-text-main: #1E293B;
+    /* Slate-800 */
+    --color-text-muted: #64748B;
+    /* Slate-500 */
+  }
+
+  body {
+    @apply bg-[#F4F6F8] text-slate-800 antialiased font-sans selection:bg-blue-500/20 selection:text-blue-700;
+    font-family: var(--font-body);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    @apply text-slate-800 tracking-tight;
+  }
+}
+
+@layer components {
+
+  /* ServiceHQ Cards */
+  .card-classic {
+    @apply bg-white rounded-3xl shadow-sm border border-slate-100;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-md hover:-translate-y-0.5;
+  }
+
+  /* Primary Blue Button */
+  .btn-primary {
+    @apply bg-[#00A0E9] hover:bg-[#0090D0] text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-2;
+  }
+
+  /* Curved Header Utility */
+  .header-curve {
+    @apply bg-[#00A0E9] w-full relative;
+    border-bottom-left-radius: 40px;
+    border-bottom-right-radius: 40px;
+  }
+
+  /* Input Fields */
+  .input-field {
+    @apply w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400;
+  }
 }

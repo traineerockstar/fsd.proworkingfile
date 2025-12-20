@@ -1,5 +1,5 @@
 
-import { processFieldDataFromImages } from './geminiService';
+import { processFieldDataFromImages, classifyDocument } from './geminiService';
 import { listFilesInFolder, getFileBase64 } from './googleDriveService';
 import { Job } from '../context/JobContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -27,11 +27,43 @@ export interface StructuredSchedule {
     date: string;
 }
 
+// 2b. Classification Interface
+interface FileWithClassification {
+    id: string;
+    base64: string;
+    type: string;
+}
+
 export const processScheduleImages = async (accessToken: string, fileIds: string[]): Promise<StructuredSchedule> => {
     // 1. Download images
-    const base64Images = await Promise.all(fileIds.map(id => getFileBase64(accessToken, id)));
+    const rawImages = await Promise.all(fileIds.map(async id => {
+        const base64 = await getFileBase64(accessToken, id);
+        return { id, base64 };
+    }));
 
-    // 2. Gemini Analysis
+    // 2. Classify & Filter
+    console.log("[@Ingestion-Agent]: Classifying documents...");
+    const validImages: string[] = [];
+
+    for (const img of rawImages) {
+        // Use the new classification tool
+        const analysis = await classifyDocument(img.base64);
+        console.log(`File ${img.id} classified as: ${analysis.docType} (${analysis.summary})`);
+
+        if (['SCHEDULE', 'JOB_SHEET'].includes(analysis.docType)) {
+            validImages.push(img.base64);
+        } else {
+            console.warn(`Skipping ${analysis.docType}: Not a schedule or job sheet.`);
+            // TODO: Move to Knowledge Folder if MANUAL
+        }
+    }
+
+    if (validImages.length === 0) {
+        console.warn("No valid schedule/job images found.");
+        return { jobs: [], date: new Date().toISOString().split('T')[0] };
+    }
+
+    // 3. Process Valid Images
     // Note: We are reusing standard processFieldDataFromImages. 
     // Ideally we might want a new tailored prompt for "Schedule Mode" if the main one is too focused on single job cards,
     // but the main prompt IS designed for Schedule + Jobs loop.
@@ -39,7 +71,7 @@ export const processScheduleImages = async (accessToken: string, fileIds: string
     // Let's assume the user dumps EVERYTHING (Schedule + Job Cards) into the input folder.
 
     // For MVP, lets assume the Gemini Service handles the "bulk" logic as described in its Master Prompt.
-    const processedData = await processFieldDataFromImages(base64Images);
+    const processedData = await processFieldDataFromImages(validImages);
 
     // 3. Convert Gemini Data Table to Job Objects
     // The Gemini service returns a 'dataTable' string (markdown) and 'notifications'.
@@ -68,12 +100,24 @@ export const parseGeminiResponseToJobs = (data: any): StructuredSchedule => {
     const jobs = data.service_appointments.map((appt: any, index: number) => {
         // Calculate Time Slots (Naive Chain)
         // If extracted "original_time_slot" exists, maybe we prioritize that? 
-        // For now, adhering to the "Layout Analysis" rule that "Time" is TBD/Blank and we define it.
-        const endTime = addHours(startTime, 1); // 1 Hour slots default based on user preference? Or 2? Original code had 2. Let's stick to simple logic or just use what's there.
-        // Let's use 2 hours as a safe standard for repairs.
-        const calcEndTime = addHours(startTime, 2);
+        let finalTimeSlot = "";
 
-        const finalTimeSlot = `${startTime} - ${calcEndTime}`;
+        if (appt.original_time_slot && appt.original_time_slot.length > 3) {
+            finalTimeSlot = appt.original_time_slot;
+            // Update our running startTime to the end of this extracted slot for the next fallback if needed
+            // Simple hack: if it looks like "HH:MM - HH:MM", take the second part
+            const parts = appt.original_time_slot.split('-');
+            if (parts.length > 1) {
+                startTime = parts[1].trim();
+            }
+        } else {
+            // Fallback to calculation
+            const endTime = addHours(startTime, 1);
+            const calcEndTime = addHours(startTime, 2);
+            finalTimeSlot = `${startTime} - ${calcEndTime}`;
+            // Advance Time
+            startTime = calcEndTime;
+        }
 
         // Prepare Job Structure
         const job: Job = {
@@ -97,8 +141,7 @@ export const parseGeminiResponseToJobs = (data: any): StructuredSchedule => {
             // detectedProduct: appt.asset?.product_line
         };
 
-        // Advance Time
-        startTime = calcEndTime;
+        // Advance Time logic moved inside conditional above
 
         return job;
     });

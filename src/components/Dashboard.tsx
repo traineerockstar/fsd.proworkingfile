@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shell } from './Shell'; // Use Shell now
+import { Shell } from './Shell';
 import { JobCard } from './JobCard';
 import { JobDetail } from './JobDetail';
 import Settings from './Settings';
@@ -8,7 +8,7 @@ import { DiagnosticWizard } from './DiagnosticWizard';
 import { IngestManager } from './IngestManager';
 import { MessageCenter } from './MessageCenter';
 import { TrainingCenter } from './TrainingCenter';
-import { Menu, Search, Bell, Wrench, Calendar, MessageSquare, Book } from 'lucide-react';
+import { ArrowRight, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useJobs, Job } from '../context/JobContext';
 import { Bot } from 'lucide-react';
@@ -21,7 +21,6 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ accessToken, onLogout }) => {
     const { jobs } = useJobs();
     const [activeView, setActiveView] = useState('dashboard');
-    // const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Managed by Shell now
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [oscarJob, setOscarJob] = useState<Job | null>(null);
 
@@ -41,8 +40,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ accessToken, onLogout }) =
 
     return (
         <Shell activeView={activeView} onNavigate={setActiveView} onLogout={onLogout}>
-            {({ toggleSidebar }: { toggleSidebar: () => void }) => (
-                <div className="flex flex-col h-full relative">
+            {() => (
+                <div className="flex flex-col gap-6 relative">
                     <AnimatePresence>
                         {oscarJob && <OscarChat job={oscarJob} onClose={() => setOscarJob(null)} />}
                         {showDiagnostic && <DiagnosticWizard accessToken={accessToken} onClose={() => setShowDiagnostic(false)} />}
@@ -51,129 +50,123 @@ export const Dashboard: React.FC<DashboardProps> = ({ accessToken, onLogout }) =
                         {showTraining && <TrainingCenter accessToken={accessToken} onClose={() => setShowTraining(false)} />}
                     </AnimatePresence>
 
-                    {/* Top Navbar */}
-                    <header className="sticky top-0 z-30 bg-black/60 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between shrink-0">
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={toggleSidebar}
-                                className="p-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all md:hidden"
-                            >
-                                <Menu size={20} />
-                            </button>
-                            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                                {selectedJob ? 'Job Details' : (activeView === 'dashboard' ? 'Schedule' : activeView.charAt(0).toUpperCase() + activeView.slice(1))}
-                            </h1>
-                        </div>
+                    {/* Dashboard View */}
+                    {activeView === 'dashboard' && (
+                        <>
+                            {/* OVERLAPPING SUMMARY CARD */}
+                            <div className="card-classic p-6 flex flex-col gap-6 relative z-20">
+                                <div className="flex items-start justify-between border-b border-slate-100 pb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 bg-slate-100 rounded-2xl border border-slate-200 flex items-center justify-center text-slate-400 font-bold text-xs">
+                                            LOGO
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-heading font-bold text-slate-800">Global Tech Services</h2>
+                                            <p className="text-sm text-slate-500">Field Operations</p>
+                                        </div>
+                                    </div>
+                                </div>
 
-                        <div className="flex items-center gap-2">
-                            {/* Quick Tools */}
-                            <div className="hidden md:flex items-center gap-1 mr-4 border-r border-white/10 pr-4">
-                                <button onClick={() => setShowDiagnostic(true)} className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors" title="Diagnostic Wizard">
-                                    <Wrench size={18} />
-                                </button>
-                                <button onClick={() => setShowIngest(true)} className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Smart Scheduler">
-                                    <Calendar size={18} />
-                                </button>
-                                <button onClick={() => setShowMessages(true)} className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors" title="Message Center">
-                                    <MessageSquare size={18} />
-                                </button>
-                                <button onClick={() => setShowTraining(true)} className="p-2 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors" title="Training Center">
-                                    <Book size={18} />
-                                </button>
+                                <div className="flex items-center justify-around text-center">
+                                    <div>
+                                        <div className="text-3xl font-bold text-[#00A0E9]">7<span className="text-lg font-medium text-slate-400">hrs</span></div>
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Today</div>
+                                    </div>
+                                    <div className="w-px h-12 bg-slate-100" />
+                                    <div>
+                                        <div className="text-3xl font-bold text-[#00A0E9]">35<span className="text-lg font-medium text-slate-400">hrs</span></div>
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">This Week</div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div className="flex items-center gap-4">
-                                <button className="p-2 text-slate-400 hover:text-white transition-colors relative">
-                                    <Bell size={20} />
-                                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-black" />
-                                </button>
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 border border-white/20 shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
+                            {/* 2x2 STATS GRID */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
+                                    <span className="text-2xl font-bold text-slate-700">13</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Unconfirmed</span>
+                                </div>
+                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
+                                    <span className="text-2xl font-bold text-rose-500">18</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Completed</span>
+                                </div>
+                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
+                                    <span className="text-2xl font-bold text-emerald-500">2</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">In-Progress</span>
+                                </div>
+                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
+                                    <span className="text-2xl font-bold text-amber-500">4</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Upcoming</span>
+                                </div>
                             </div>
-                        </div>
-                    </header>
 
-                    <main className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                        <AnimatePresence mode="wait">
-                            {selectedJob ? (
-                                <JobDetail key="detail" job={selectedJob} onBack={handleBack} />
-                            ) : (
-                                <motion.div
-                                    key="list"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                >
-                                    {/* Search Bar - Only show on list view */}
-                                    {(activeView === 'dashboard' || activeView === 'jobs') && (
-                                        <div className="relative mb-8">
-                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                            <input
-                                                type="text"
-                                                placeholder="Search jobs, engineers, or locations..."
-                                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all"
+                            {/* LAST ACTIVITIES */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between px-1">
+                                    <h3 className="font-heading font-bold text-lg text-slate-700">Last Activities</h3>
+                                    <button className="text-sm font-bold text-slate-400 hover:text-[#00A0E9] flex items-center gap-1">
+                                        View All <ArrowRight size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {jobs.map((job, index) => (
+                                        <div key={job.id} onClick={() => handleJobClick(job)}>
+                                            <JobCard
+                                                job={job}
+                                                index={index}
+                                                onAskOscar={setOscarJob}
+                                                onOpenOscar={setOscarJob}
                                             />
                                         </div>
-                                    )}
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    )}
 
-                                    {/* Content Area */}
-                                    {activeView === 'dashboard' && (
-                                        <div className="space-y-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {jobs.map((job, index) => (
-                                                    <div key={job.id} onClick={() => handleJobClick(job)}>
-                                                        <JobCard
-                                                            job={job}
-                                                            index={index}
-                                                            onAskOscar={setOscarJob}
-                                                            onOpenOscar={setOscarJob}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                    {/* OTHER VIEWS */}
+                    {activeView === 'jobs' && (
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-slate-800">All Jobs</h2>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search..."
+                                        className="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-[#00A0E9]"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {jobs.map((job, index) => (
+                                    <div key={job.id} onClick={() => handleJobClick(job)}>
+                                        <JobCard
+                                            job={job}
+                                            index={index}
+                                            onAskOscar={setOscarJob}
+                                            onOpenOscar={setOscarJob}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                                    {activeView === 'jobs' && (
-                                        <div className="space-y-6">
-                                            <h2 className="text-xl font-bold text-slate-200 mb-4">All Active Jobs</h2>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {jobs.map((job, index) => (
-                                                    <div key={job.id} onClick={() => handleJobClick(job)}>
-                                                        <JobCard
-                                                            job={job}
-                                                            index={index}
-                                                            onAskOscar={setOscarJob}
-                                                            onOpenOscar={setOscarJob}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                    {activeView === 'settings' && (
+                        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                            <Settings onClose={() => setActiveView('dashboard')} accessToken={accessToken} />
+                        </div>
+                    )}
 
-                                    {activeView === 'settings' && (
-                                        <Settings onClose={() => setActiveView('dashboard')} accessToken={accessToken} />
-                                    )}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </main>
-
-                    {/* Oscar FAB */}
-                    {!oscarJob && (
-                        <button
-                            onClick={() => setOscarJob({ id: 'global' } as Job)}
-                            className="absolute bottom-6 right-6 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-lg shadow-purple-500/30 text-white hover:scale-110 transition-transform z-40 group"
-                        >
-                            <Bot size={28} />
-                            <span className="absolute right-full mr-4 bg-black/80 text-white text-xs px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-sm">
-                                Ask Oscar
-                            </span>
-                        </button>
+                    {selectedJob && (
+                        <div className="fixed inset-0 z-50 bg-[#F4F6F8] overflow-y-auto">
+                            <JobDetail job={selectedJob} onBack={handleBack} />
+                        </div>
                     )}
                 </div>
-            )
-            }
-        </Shell >
+            )}
+        </Shell>
     );
 };

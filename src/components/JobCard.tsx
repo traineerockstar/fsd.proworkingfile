@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { MapPin, Clock, AlertCircle, Wrench, Search, MessageSquare, CheckCircle2, Copy, Sparkles, MoreHorizontal } from 'lucide-react';
 import { Job } from '../context/JobContext';
+import { MapPin, Calendar, Clock, ChevronRight, Bot, Search, Copy, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface JobCardProps {
     job: Job;
@@ -12,30 +12,35 @@ interface JobCardProps {
 }
 
 export const JobCard: React.FC<JobCardProps> = ({ job, index, onAskOscar, onPartSearch, onOpenOscar }) => {
+    // Legacy support or future use
     const [partQuery, setPartQuery] = useState('');
-
-    const handlePartSearch = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && onPartSearch) {
-            onPartSearch(job, partQuery);
-        }
-    };
 
     const handleOscarClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (onOpenOscar) {
             onOpenOscar(job);
         } else {
-            onAskOscar(job); // Fallback to legacy prop
+            onAskOscar(job);
         }
     };
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'pending': return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
-            case 'in-progress': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-            case 'completed': return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-            case 'issue': return 'bg-red-500/20 text-red-300 border-red-500/30';
-            default: return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+            case 'pending': return 'border-l-slate-400';
+            case 'in-progress': return 'border-l-[#00A0E9]';
+            case 'completed': return 'border-l-emerald-500';
+            case 'issue': return 'border-l-rose-500';
+            default: return 'border-l-slate-400';
+        }
+    };
+
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'pending': return <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">Pending</span>;
+            case 'in-progress': return <span className="px-2 py-1 rounded-md bg-blue-50 text-[#00A0E9] text-[10px] font-bold uppercase">In Progress</span>;
+            case 'completed': return <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase">Completed</span>;
+            case 'issue': return <span className="px-2 py-1 rounded-md bg-rose-50 text-rose-600 text-[10px] font-bold uppercase">Issue</span>;
+            default: return null;
         }
     };
 
@@ -44,117 +49,56 @@ export const JobCard: React.FC<JobCardProps> = ({ job, index, onAskOscar, onPart
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="group relative bg-[#0a0a0a] backdrop-blur-md border border-white/10 rounded-3xl p-5 hover:bg-white/5 hover:border-white/20 hover:shadow-2xl transition-all cursor-pointer flex flex-col gap-4 overflow-hidden"
+            className={`card-classic p-5 border-l-4 ${getStatusColor(job.status)} flex flex-col gap-3 group cursor-pointer hover:shadow-md transition-all`}
         >
-            {/* 1. Header Row (Flex) */}
-            <div className="flex justify-between items-start gap-4">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(job.status)}`}>
-                            {job.status.replace('-', ' ')}
-                        </span>
-                        <div className="flex items-center gap-1 text-slate-400 text-xs font-mono bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
-                            <Clock size={12} />
-                            <span>{job.timeSlot}</span>
-                        </div>
-                    </div>
-                    <div>
-                        {job.priority === 'high' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">
-                                <AlertCircle size={10} /> High Priority
-                            </span>
-                        )}
-                        <h3 className="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors line-clamp-1" title={job.detectedProduct || job.modelNumber || "Unknown Product"}>
-                            {job.detectedProduct || job.modelNumber || "Service Job"}
-                        </h3>
-                        <p className="text-slate-500 text-xs">{job.customerName}</p>
-                    </div>
+            {/* Header: Date & Status */}
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
+                    <Calendar size={14} />
+                    <span>{new Date(job.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    <span className="w-1 h-1 rounded-full bg-slate-300" />
+                    <Clock size={14} />
+                    <span>{job.time}</span>
                 </div>
+                {getStatusBadge(job.status)}
+            </div>
 
-                {/* Thumbnail Image (Fixed 64px) */}
-                <div className="w-16 h-16 rounded-xl bg-slate-800 border border-white/10 flex-shrink-0 overflow-hidden relative group/img">
-                    {/* Placeholder for actual image if available in job data */}
-                    <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-slate-500">
-                        <Wrench size={24} />
-                    </div>
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                        <Search size={16} className="text-white" />
-                    </div>
+            {/* Main Content */}
+            <div>
+                <h3 className="text-lg font-heading font-bold text-slate-800 group-hover:text-[#00A0E9] transition-colors line-clamp-1">
+                    {job.customer.name}
+                </h3>
+                <div className="flex items-start gap-1.5 mt-1 text-slate-500 text-sm">
+                    <MapPin size={16} className="shrink-0 mt-0.5" />
+                    <p className="line-clamp-2 leading-snug">{job.location.address}</p>
                 </div>
             </div>
 
-            {/* 2. Body Section (Stack) */}
-            <div className="space-y-3">
-                {/* Location */}
-                <div className="flex items-start gap-2 text-slate-400 text-sm">
-                    <MapPin size={16} className="mt-0.5 text-slate-500 shrink-0" />
-                    <span className="line-clamp-1 hover:text-white transition-colors">{job.address}</span>
-                </div>
-
-                {/* Raw Fault */}
-                <div className="text-sm text-slate-300 line-clamp-2 leading-relaxed">
-                    <span className="text-slate-500 font-bold text-xs uppercase mr-2">Issue:</span>
-                    {job.engineerNotes || "No fault description provided."}
-                </div>
-
-                {/* Smart Summary (AI) */}
-                {job.aiSummary ? (
-                    <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-1 opacity-20">
-                            <Sparkles size={40} className="text-indigo-400" />
-                        </div>
-                        <h4 className="text-indigo-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1 mb-1">
-                            <Sparkles size={12} /> AI Summary
-                        </h4>
-                        <p className="text-indigo-100 text-xs leading-relaxed relative z-10">
-                            {job.aiSummary}
-                        </p>
-                        <button className="text-[10px] text-indigo-400 font-bold mt-2 hover:text-indigo-300 flex items-center gap-1">
-                            View Analysis <MoreHorizontal size={12} />
-                        </button>
+            {/* AI Summary Highlight */}
+            {job.aiSummary && (
+                <div className="mt-1 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 flex gap-3">
+                    <div className="mt-0.5 p-1 rounded-md bg-indigo-100 text-indigo-600 shrink-0">
+                        <Bot size={14} />
                     </div>
-                ) : (
-                    // Fallback / Empty State - Optional: Could show "Analyze" button
-                    <div className="hidden" />
-                )}
-
-
-                {/* Tools Row */}
-                <div className="flex gap-2 pt-2 justify-end">
-                    {/* Ask Oscar Advice Button */}
-                    <button
-                        onClick={handleOscarClick}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-900/20 transition-all active:scale-95"
-                    >
-                        <Sparkles size={14} />
-                        <span>Ask Oscar</span>
-                    </button>
+                    <p className="text-xs text-indigo-900 line-clamp-2 leading-relaxed">
+                        <span className="font-bold">Oscar:</span> {job.aiSummary}
+                    </p>
                 </div>
-            </div>
+            )}
 
-            {/* 3. Footer Section (Notes & Actions) */}
-            <div className="pt-3 border-t border-white/5 flex gap-2">
-                <textarea
-                    placeholder="Engineer notes..."
-                    className="flex-1 bg-transparent border-none text-slate-400 text-xs resize-none h-8 placeholder:text-slate-700 focus:ring-0 p-0"
-                    onClick={(e) => e.stopPropagation()}
-                />
-                <div className="flex items-center gap-1">
-                    <button
-                        className="p-2 text-slate-600 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                        title="Copy Job Details"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <Copy size={14} />
-                    </button>
-                    <button
-                        className="p-2 text-emerald-600/50 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors"
-                        title="Mark Complete"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <CheckCircle2 size={14} />
-                    </button>
+            {/* Footer Actions */}
+            <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded">#{job.id}</span>
                 </div>
+
+                <button
+                    onClick={handleOscarClick}
+                    className="flex items-center gap-1.5 text-xs font-bold text-[#00A0E9] bg-blue-50 px-3 py-2 rounded-xl hover:bg-[#00A0E9] hover:text-white transition-all"
+                >
+                    <Bot size={16} />
+                    <span>Ask Oscar</span>
+                </button>
             </div>
         </motion.div>
     );

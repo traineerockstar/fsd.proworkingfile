@@ -1,5 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import { z } from "zod";
 
 import type { ProcessedData } from '../types';
 import { searchKnowledgeBase } from './googleDriveService';
@@ -8,6 +9,48 @@ import { knowledgeService } from './knowledgeService';
 import { searchFaultCode, searchManual } from './localKnowledge';
 import { findLearnedSolution } from './learningService';
 
+
+
+// --- ZOD SCHEMAS ---
+
+const AssetSchema = z.object({
+  asset_name: z.string().default("Unknown Asset"),
+  serial_number: z.string().nullable().optional(),
+  product_id: z.string().nullable().optional(),
+  product_category: z.string().nullable().optional(),
+  brand: z.string().nullable().optional(),
+  product_line: z.string().nullable().optional(),
+});
+
+const WorkOrderSchema = z.object({
+  subject: z.string().default("Service Call"),
+  description: z.string().default(""),
+  status: z.string().optional(),
+});
+
+const ServiceAppointmentSchema = z.object({
+  service_appointment_id: z.string().default(() => `SA-${Math.floor(Math.random() * 10000)}`),
+  customer_name: z.string().default("Unknown Customer"),
+  address: z.string().default("Unknown Address"),
+  original_time_slot: z.string().default(""),
+  work_order: WorkOrderSchema.optional().default({ subject: "Service Call", description: "" }),
+  asset: AssetSchema.optional().default({ asset_name: "Unknown Asset" }),
+});
+
+const ScheduleZodSchema = z.object({
+  schedule_date: z.string().optional().default(() => new Date().toISOString().split('T')[0]),
+  service_appointments: z.array(ServiceAppointmentSchema).default([]),
+});
+
+const JobSheetZodSchema = z.object({
+  detectedProduct: z.string().nullable().optional(),
+  partsUsed: z.array(z.string()).default([]),
+  engineerNotes: z.string().optional().default(""),
+  serialNumber: z.string().nullable().optional(),
+  modelNumber: z.string().nullable().optional(),
+  productionYear: z.string().nullable().optional(),
+  derivedProductType: z.string().nullable().optional(),
+});
 
 const LAYOUT_ANALYSIS_LOGIC = `
 1. VISUAL EXTRACTION LOGIC (The New Rules):
@@ -239,9 +282,18 @@ export async function processFieldDataFromImages(
     const rawJson = response.text;
     if (!rawJson) throw new Error("No text returned from Gemini");
 
-    return JSON.parse(rawJson); // Return raw JSON matching new schema, type casting removed for now
+    const parsed = JSON.parse(rawJson);
+
+    // Validate with Zod
+    console.log("Validating Schedule Data...");
+    const validated = ScheduleZodSchema.parse(parsed);
+    return validated as any; // Cast back to compatible type for now, or update interfaces later
   } catch (error) {
     console.error("Gemini API Error (Schedule):", error);
+    if (error instanceof z.ZodError) {
+      console.error("Validation Failed:", error.issues);
+      throw new Error("AI returned invalid schedule data.");
+    }
     throw new Error("Failed to process schedule images.");
   }
 }
@@ -266,10 +318,62 @@ export async function analyzeJobSheet(base64Image: string): Promise<any> {
 
     const rawJson = response.text;
     if (!rawJson) throw new Error("No text returned from Gemini");
-    return JSON.parse(rawJson);
+
+    const parsed = JSON.parse(rawJson);
+    return JobSheetZodSchema.parse(parsed);
+
   } catch (error) {
     console.error("Gemini API Error (Job Sheet):", error);
+    if (error instanceof z.ZodError) {
+      throw new Error("AI returned invalid job sheet data.");
+    }
     throw new Error("Failed to analyze job sheet.");
+  }
+}
+
+// DOC CLASSIFICATION for Smart Ingestion
+const classificationSchema = {
+  type: Type.OBJECT,
+  properties: {
+    docType: {
+      type: Type.STRING,
+      enum: ["JOB_SHEET", "SCHEDULE", "MANUAL", "PART_LIST", "UNKNOWN"],
+      description: "The type of document in the image."
+    },
+    confidence: { type: Type.NUMBER },
+    summary: { type: Type.STRING }
+  },
+  required: ["docType", "confidence"]
+};
+
+export async function classifyDocument(base64Image: string): Promise<{ docType: string, summary?: string }> {
+  const imagePart = {
+    inlineData: {
+      mimeType: 'image/png',
+      data: base64Image
+    }
+  };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-exp', // Use fast vision model if available, fallback to 1.5-flash
+      contents: {
+        parts: [
+          { text: "Classify this document. Is it a Field Service Job Sheet (form with handwriting), a Daily Schedule app screenshot, a Technical Manual page, or a Spare Parts List?" },
+          imagePart
+        ]
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: classificationSchema,
+      },
+    });
+
+    const json = JSON.parse(response.text || '{}');
+    return json;
+  } catch (e) {
+    console.error("Classification Error", e);
+    return { docType: "UNKNOWN" };
   }
 }
 
@@ -329,7 +433,8 @@ ${referenceMaterial}
 INSTRUCTIONS:
 1. Use the Reference Material above if relevant.
 2. If the user asks about a part, check if it's in the reference material (manuals/BOMs).
-3. Be concise and professional.
+3. If citing a "LEARNED SOLUTION", mention the Confidence Level (High/Medium/Low) and Success Count to the user.
+4. Be concise and professional.
 `;
 
     // 3. Call Gemini (Using @google/genai SDK stateless pattern)

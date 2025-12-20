@@ -11,6 +11,22 @@ export interface DriveFile {
     body: any;
 }
 
+export interface JobSummary {
+    id: string;
+    customerName: string;
+    status: string;
+    date: string;
+    driveFileId: string;
+    [key: string]: any; // Allow other fields for flexibility
+}
+
+export interface Manifest {
+    jobs: JobSummary[];
+    lastUpdated: string;
+}
+
+const MANIFEST_FILE_NAME = 'manifest.json';
+
 export const initGoogleAvailable = () => {
     // This function can be used to load GAPI if not already loaded by a provider,
     // though usually handled by the login component now.
@@ -74,14 +90,7 @@ export const saveJobToDrive = async (accessToken: string, jobData: any) => {
         const folderId = await findOrCreateFolder(accessToken);
         const fileName = `job_${jobData.id}.json`;
 
-        // Check if file exists to update overwrite it
-        const query = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
-        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
-        const searchResp = await fetch(searchUrl, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        const searchData = await searchResp.json();
-
+        // Prepare metadata and content
         const fileMetadata = {
             name: fileName,
             parents: [folderId]
@@ -96,30 +105,214 @@ export const saveJobToDrive = async (accessToken: string, jobData: any) => {
         form.append('metadata', new Blob([JSON.stringify(fileMetadata)], { type: 'application/json' }));
         form.append('file', new Blob([JSON.stringify(jobData)], { type: 'application/json' }));
 
-        if (searchData.files && searchData.files.length > 0) {
-            // Update existing file
-            const fileId = searchData.files[0].id;
+        let fileId = jobData.driveFileId;
+
+        // STRATEGY 1: Direct Update via ID (Fastest)
+        if (fileId) {
+            console.log(`[@Chief-Architect]: Optimizing save - using Direct Patch for ${fileId}`);
             const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
-            await fetch(updateUrl, {
+            const patchResp = await fetch(updateUrl, {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${accessToken}` },
                 body: form
             });
-            console.log(`Updated job ${jobData.id}`);
-        } else {
-            // Create new file
-            const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-            await fetch(uploadUrl, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}` },
-                body: form
-            });
-            console.log(`Created job ${jobData.id}`);
+
+            if (patchResp.ok) {
+                console.log(`Updated job ${jobData.id} via direct patch.`);
+            } else if (patchResp.status === 404) {
+                console.warn(`[@Chief-Architect]: Stale Drive ID ${fileId}. File missing. Falling back to search/create.`);
+                fileId = null; // Force fallback
+            } else {
+                throw new Error(`Direct patch failed: ${patchResp.statusText}`);
+            }
         }
+
+        // STRATEGY 2: Search then Update/Create (Fallback)
+        if (!fileId) {
+            const query = `name='${fileName}' and '${folderId}' in parents and trashed=false`;
+            const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+            const searchResp = await fetch(searchUrl, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const searchData = await searchResp.json();
+
+            if (searchData.files && searchData.files.length > 0) {
+                // Update existing file
+                fileId = searchData.files[0].id;
+                const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+                await fetch(updateUrl, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${accessToken}` },
+                    body: form
+                });
+                console.log(`Updated job ${jobData.id} (found via search)`);
+            } else {
+                // Create new file
+                const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+                const createResp = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` },
+                    body: form
+                });
+                const createData = await createResp.json();
+                console.log(`Created new job file ${jobData.id}`);
+                fileId = createData.id;
+            }
+        }
+
+        // 3. Update Manifest (Atomic-ish)
+        if (fileId) {
+            await updateManifest(accessToken, {
+                ...jobData,
+                driveFileId: fileId
+            });
+        }
+
+        return fileId;
 
     } catch (error) {
         console.error("Drive Save Error:", error);
     }
+    return null;
+};
+
+// --- MANIFEST SYSTEMS ---
+
+// --- MANIFEST SYSTEMS ---
+
+// SMART CACHE
+let manifestCache: Manifest | null = null;
+let lastManifestFetch = 0;
+const MANIFEST_TTL = 1000 * 60 * 2; // 2 minutes freshness
+
+const getManifest = async (accessToken: string, forceRefresh = false): Promise<Manifest | null> => {
+    // 1. Check Cache
+    if (!forceRefresh && manifestCache && (Date.now() - lastManifestFetch < MANIFEST_TTL)) {
+        return manifestCache;
+    }
+
+    try {
+        console.log("[@Data-Ops]: Fetching Manifest from Drive...");
+        const folderId = await findOrCreateFolder(accessToken);
+        const query = `name='${MANIFEST_FILE_NAME}' and '${folderId}' in parents and trashed=false`;
+        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+        const res = await fetch(searchUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        const data = await res.json();
+
+        if (data.files && data.files.length > 0) {
+            const manifestId = data.files[0].id;
+            const contentUrl = `https://www.googleapis.com/drive/v3/files/${manifestId}?alt=media`;
+            const contentRes = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+
+            const fetched = await contentRes.json();
+
+            // Validate & Update Cache
+            if (fetched && Array.isArray(fetched.jobs)) {
+                manifestCache = fetched;
+                lastManifestFetch = Date.now();
+                return manifestCache;
+            }
+        }
+    } catch (e) {
+        console.warn("Manifest fetch failed", e);
+    }
+    return null;
+};
+
+const saveManifest = async (accessToken: string, manifest: Manifest) => {
+    try {
+        const folderId = await findOrCreateFolder(accessToken);
+
+        // Check if exists
+        const query = `name='${MANIFEST_FILE_NAME}' and '${folderId}' in parents and trashed=false`;
+        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+        const res = await fetch(searchUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        const data = await res.json();
+
+        let fileId = null;
+        if (data.files && data.files.length > 0) fileId = data.files[0].id;
+
+        const media = {
+            mimeType: 'application/json',
+            body: JSON.stringify(manifest)
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify({ name: MANIFEST_FILE_NAME, parents: [folderId] })], { type: 'application/json' }));
+        form.append('file', new Blob([JSON.stringify(manifest)], { type: 'application/json' }));
+
+        if (fileId) {
+            const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+            await fetch(updateUrl, { method: 'PATCH', headers: { 'Authorization': `Bearer ${accessToken}` }, body: form });
+        } else {
+            const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+            await fetch(uploadUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}` }, body: form });
+        }
+
+        // Update Cache
+        manifestCache = manifest;
+        lastManifestFetch = Date.now();
+
+    } catch (e) {
+        console.error("Failed to save manifest", e);
+    }
+};
+
+const updateManifest = async (accessToken: string, job: JobSummary) => {
+    let manifest = await getManifest(accessToken);
+    if (!manifest) {
+        // If no manifest exists, we can't efficiently update it without a rebuild.
+        // But for a single save, maybe we just create a new one with this 1 file?
+        // No, safer to trigger a rebuild or start fresh.
+        // Let's lazy init:
+        manifest = { jobs: [], lastUpdated: new Date().toISOString() };
+    }
+
+    // Upsert Job
+    const existingIndex = manifest.jobs.findIndex(j => j.id === job.id);
+    if (existingIndex >= 0) {
+        manifest.jobs[existingIndex] = job;
+    } else {
+        manifest.jobs.push(job);
+    }
+    manifest.lastUpdated = new Date().toISOString();
+
+    await saveManifest(accessToken, manifest);
+};
+
+// Rebuilds manifest by scanning ALL job files (The 'Old Way')
+export const rebuildManifest = async (accessToken: string): Promise<Manifest> => {
+    console.log("⚠️ Rebuilding Manifest from raw files...");
+    const folderId = await findOrCreateFolder(accessToken);
+    const query = `'${folderId}' in parents and trashed=false and name contains 'job_'`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+    const data = await response.json();
+
+    const jobs: JobSummary[] = [];
+
+    if (data.files) {
+        // Parallel fetch limited? No, let's just use Promise.all for now as it's a recovery op
+        const results = await Promise.all(data.files.map(async (file: any) => {
+            const fileUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+            try {
+                const res = await fetch(fileUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                const job = await res.json();
+                return { ...job, driveFileId: file.id };
+            } catch (e) {
+                return null;
+            }
+        }));
+        jobs.push(...results.filter(j => j !== null));
+    }
+
+    const manifest: Manifest = {
+        jobs: jobs,
+        lastUpdated: new Date().toISOString()
+    };
+
+    await saveManifest(accessToken, manifest);
+    return manifest;
 };
 
 export const findSubfolder = async (accessToken: string, parentId: string, folderName: string): Promise<string> => {
@@ -197,22 +390,18 @@ export const getFileBase64 = async (accessToken: string, fileId: string): Promis
 
 export const listJobsFromDrive = async (accessToken: string): Promise<any[]> => {
     try {
-        const folderId = await findOrCreateFolder(accessToken);
-        const query = `'${folderId}' in parents and trashed=false and name contains 'job_'`;
-        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+        console.log("🚀 Loading Jobs via Manifest Strategy...");
+        // 1. Try to get manifest
+        let manifest = await getManifest(accessToken);
 
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
-        const data = await response.json();
+        // 2. If no manifest, REBUILD IT (Self-Healing)
+        if (!manifest) {
+            console.log("⚠️ No manifest found. Triggering self-healing rebuild...");
+            manifest = await rebuildManifest(accessToken);
+        }
 
-        if (!data.files) return [];
+        return manifest.jobs || [];
 
-        const jobs = await Promise.all(data.files.map(async (file: any) => {
-            const fileUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
-            const fileResp = await fetch(fileUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
-            return await fileResp.json();
-        }));
-
-        return jobs;
     } catch (error) {
         console.error("List Jobs Error:", error);
         return [];

@@ -319,3 +319,19 @@ The application is a "Field Service Data Processor". It's a web-based tool built
     *   Updated `index.html` entry point.
     *   Fixed build errors in `geminiService.ts` (duplicate exports) and `Settings.tsx` (JSX syntax).
     *   Verified application loads successfully on development server.
+
+### 2025-12-20: Comprehensive Codebase Stocktake & Architecture Audit
+*   **Status**: Stocktake Complete. Context Re-aligned.
+*   **Core Architecture**:
+    *   Verified implementation of `Shell` layout with "Glassmorphism" UI and responsive `Sidebar`/`BottomNav`.
+    *   Confirmed `Dashboard.tsx` refactor to utilize the new `Shell` container.
+*   **Oscar System (RAG Verification)**:
+    *   **Connectivity**: Wired and Functional. `OscarChat` successfully delegates to `geminiService`.
+    *   **Logic**: `geminiService` correctly orchestrates calls to:
+        *   `knowledgeService.ts`: For manual retrieval (Drive + Exa.ai).
+        *   `learningService.ts`: For persistent, self-improving solution tracking (Drive synced).
+        *   `localKnowledge.ts`: For static JSON fallback.
+*   **New Files Detected**:
+    *   **Services**: `driveStorage`, `imageService`, `ingestionService`, `routingService`, `webSearchService`, `sheetExportService`.
+    *   **Components**: `DiagnosticWizard`, `IngestManager`, `TrainingCenter`, `MessageCenter`, `BarcodeScanner`, `KnowledgeUpload`, `TravelConnector`.
+*   **Action**: Documentation fully synchronized with the current state of the codebase files.

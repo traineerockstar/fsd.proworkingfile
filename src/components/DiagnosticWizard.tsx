@@ -2,21 +2,22 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Stethoscope, AlertTriangle, ChevronRight, Activity, Wrench, CheckCircle2, XCircle } from 'lucide-react';
-import { learningService } from '../services/learningService';
-import { FaultCode } from '../types';
+import { findLearnedSolution, recordSolution, LearnedSolution } from '../services/learningService';
 
 export const DiagnosticWizard: React.FC<{ onClose: () => void; accessToken: string }> = ({ onClose, accessToken }) => {
     const [step, setStep] = useState<'initial' | 'symptom' | 'error_code' | 'solution'>('initial');
     const [errorCode, setErrorCode] = useState('');
-    const [foundSolution, setFoundSolution] = useState<FaultCode | null>(null);
+    const [foundSolution, setFoundSolution] = useState<LearnedSolution | null>(null);
     const [isChecking, setIsChecking] = useState(false);
 
     const handleErrorCodeSubmit = async () => {
         if (!errorCode) return;
         setIsChecking(true);
         try {
-            const fix = await learningService.findFix(accessToken, errorCode);
-            setFoundSolution(fix); // might be null
+            // Simulate async delay if desired, or just call directly
+            // await new Promise(r => setTimeout(r, 500)); 
+            const solutions = findLearnedSolution(errorCode);
+            setFoundSolution(solutions.length > 0 ? solutions[0] : null);
             setStep('solution');
         } catch (e) {
             console.error(e);
@@ -29,8 +30,12 @@ export const DiagnosticWizard: React.FC<{ onClose: () => void; accessToken: stri
         if (!foundSolution && !success) return; // Logic for new fix TBD
 
         if (success && foundSolution) {
-            await learningService.recordFix(accessToken, foundSolution);
-            alert("Thansk! Knowledge Base Updated.");
+            // preparing the object to match recordSolution arguments (stripping auto-generated fields)
+            const { id, successCount, lastUsed, confidence, createdAt, ...inputData } = foundSolution;
+            // Check if accessToken is valid/mock
+            const token = accessToken || "mock-token";
+            recordSolution(token, inputData);
+            alert("Thanks! Knowledge Base Updated.");
             onClose();
         }
     };

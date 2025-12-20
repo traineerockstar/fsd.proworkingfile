@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { toast } from 'sonner';
 
 // Re-using the Job interface from JobCard, but moving it here ideally.
 // For now, defining it here to avoid circular deps if we refactor later.
@@ -17,6 +18,7 @@ export interface Job {
     detectedProduct?: string;
     partsUsed?: string[];
     aiSummary?: string; // AI generated summary of the job/fault
+    driveFileId?: string; // Google Drive File ID for direct updates
 }
 
 // Initial Mock Data (used only if local storage is empty)
@@ -54,6 +56,7 @@ interface JobContextType {
 const JobContext = createContext<JobContextType | undefined>(undefined);
 
 import { saveJobToDrive, listJobsFromDrive } from '../services/googleDriveService';
+import { getLearnedSolutions } from '../services/learningService';
 
 export const JobProvider: React.FC<{ children: ReactNode; accessToken: string | null }> = ({ children, accessToken }) => {
     const [jobs, setJobs] = useState<Job[]>(INITIAL_JOBS);
@@ -69,18 +72,17 @@ export const JobProvider: React.FC<{ children: ReactNode; accessToken: string | 
             if (accessToken) {
                 setIsLoading(true);
                 try {
-                    const driveJobs = await listJobsFromDrive(accessToken);
+                    // Parallel Load: Jobs + Learnings
+                    const [driveJobs] = await Promise.all([
+                        listJobsFromDrive(accessToken),
+                        getLearnedSolutions(accessToken) // Hydrates the cache
+                    ]);
+
                     if (driveJobs.length > 0) {
                         setJobs(driveJobs);
-                    } else {
-                        // First time? Maybe seed it or keep generic mock
-                        // For now, let's just stick with initialized state or empty
-                        // setJobs([]); 
-                        // Actually, if we want to migrate MOCK data to Drive, we could loop and save here.
-                        // But let's just load what's there.
                     }
                 } catch (err) {
-                    console.error("Failed to load jobs from Drive", err);
+                    console.error("Failed to load data from Drive", err);
                 } finally {
                     setIsLoading(false);
                 }
@@ -89,13 +91,32 @@ export const JobProvider: React.FC<{ children: ReactNode; accessToken: string | 
         loadDocs();
     }, [accessToken]);
 
-    const updateJob = (id: string, updates: Partial<Job>) => {
+    const updateJob = async (id: string, updates: Partial<Job>) => {
         setJobs(prev => prev.map(job => {
             if (job.id === id) {
                 const updatedJob = { ...job, ...updates };
-                // Sync to Drive
+                // Sync to Drive (Async side effect)
                 if (accessToken) {
-                    saveJobToDrive(accessToken, updatedJob);
+                    const savePromise = saveJobToDrive(accessToken, updatedJob);
+
+                    toast.promise(savePromise, {
+                        loading: 'Syncing to Drive...',
+                        success: (fileId) => {
+                            if (fileId && fileId !== job.driveFileId) {
+                                setJobs(current => current.map(j =>
+                                    j.id === id ? { ...j, driveFileId: fileId } : j
+                                ));
+                            }
+                            return 'Saved to Drive';
+                        },
+                        error: (err) => {
+                            // Revert optimistic update
+                            setJobs(current => current.map(j =>
+                                j.id === id ? job : j
+                            ));
+                            return 'Failed to save to Drive. Changes reverted.';
+                        }
+                    });
                 }
                 return updatedJob;
             }
@@ -137,4 +158,5 @@ export const useJobs = () => {
     return context;
 };
 
+// Aliasing for compatibility if other components use this name
 export const useJobContext = useJobs;

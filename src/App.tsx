@@ -1,50 +1,56 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { LoginScreen } from './components/LoginScreen';
 import { Dashboard } from './components/Dashboard';
+import { Loader } from './components/Loader';
 import { JobProvider } from './context/JobContext';
-import { initializeKnowledge } from './services/localKnowledge';
+import { AnimatePresence } from 'framer-motion';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { Toaster } from 'sonner';
 
-function App() {
+// Replace with your actual Client ID
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+
+const App: React.FC = () => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [knowledgeReady, setKnowledgeReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    console.log("🔐 App accessToken changed:", accessToken ? "✅ Token exists" : "❌ No token");
-  }, [accessToken]);
-
-  // Initialize local knowledge base on startup
-  useEffect(() => {
-    async function loadKnowledge() {
-      await initializeKnowledge();
-      setKnowledgeReady(true);
-      console.log("✅ Knowledge base ready");
-    }
-    loadKnowledge();
+    // Simulate initial app loading / splash screen
+    const timer = setTimeout(() => setShowSplash(false), 2000);
+    return () => clearTimeout(timer);
   }, []);
 
-  if (!knowledgeReady) {
+  const handleLogin = (token: string) => {
+    console.log("[@Chief-Architect]: Authentication successful. Token received and stored in App State.");
+    setAccessToken(token);
+  };
+
+  if (showSplash) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto mb-4"></div>
-          <p className="text-lg font-medium">Loading Oscar's knowledge base...</p>
-        </div>
+      <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center z-50">
+        <Loader size="lg" />
+        <p className="mt-4 text-slate-400 font-medium animate-pulse">Initializing FSD.PRO...</p>
       </div>
     );
   }
 
   return (
-    <JobProvider accessToken={accessToken}>
-      {accessToken ? (
-        <Dashboard accessToken={accessToken} onLogout={() => setAccessToken(null)} />
-      ) : (
-        <LoginScreen onLogin={(token) => {
-          console.log("📥 App received token from LoginScreen:", token);
-          setAccessToken(token);
-        }} />
-      )}
-    </JobProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <AnimatePresence mode="wait">
+        {!accessToken ? (
+          <LoginScreen key="login" onLogin={handleLogin} />
+        ) : (
+          <JobProvider accessToken={accessToken}>
+            <ErrorBoundary>
+              <Dashboard key="dashboard" />
+            </ErrorBoundary>
+          </JobProvider>
+        )}
+      </AnimatePresence>
+      <Toaster position="top-right" theme="dark" />
+    </GoogleOAuthProvider>
   );
-}
+};
 
 export default App;

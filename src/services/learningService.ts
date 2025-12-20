@@ -1,5 +1,6 @@
 // Learning Service - Self-Improving Knowledge Base
-// Stores successful fixes in localStorage and retrieves them for future reference
+// Stores successful fixes in Google Drive (replacing localStorage) and retrieves them for future reference
+import { findOrCreateFolder, findSubfolder } from './googleDriveService';
 
 interface LearnedSolution {
     id: string;
@@ -16,28 +17,107 @@ interface LearnedSolution {
     createdAt: string;
 }
 
-const STORAGE_KEY = 'oscar_learned_solutions';
+const LEARNING_FILE_NAME = 'learned_solutions.json';
+const APP_FOLDER_NAME = 'FSD_PRO_DATA';
 
-// Load all learned solutions from localStorage
-export function getLearnedSolutions(): LearnedSolution[] {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (!stored) return [];
+// In-Memory Cache
+let solutionsCache: LearnedSolution[] | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
-        const data = JSON.parse(stored);
-        return data.solutions || [];
-    } catch (error) {
-        console.error('Error loading learned solutions:', error);
-        return [];
+// Load all learned solutions (from Cache or Drive)
+// NOW ASYNC to support Drive Fetch
+export async function getLearnedSolutions(accessToken?: string): Promise<LearnedSolution[]> {
+    // 1. Return Cache if valid
+    if (solutionsCache && (Date.now() - lastFetchTime < CACHE_TTL)) {
+        return solutionsCache;
     }
+
+    // 2. Fetch from Drive if Token provided
+    if (accessToken) {
+        try {
+            console.log("Downloading Oscar's Brain from Drive...");
+            const rootId = await findOrCreateFolder(accessToken);
+            // Check if file exists in root or data folder. 
+            // The plan said FSD_PRO_DATA. findOrCreateFolder returns FSD_PRO_DATA id by default in googleDriveService?
+            // checking googleDriveService: findOrCreateFolder creates 'FSD_PRO_DATA'. So rootId is correct.
+
+            const query = `name='${LEARNING_FILE_NAME}' and '${rootId}' in parents and trashed=false`;
+            const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+            const res = await fetch(searchUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+            const data = await res.json();
+
+            if (data.files && data.files.length > 0) {
+                const fileId = data.files[0].id;
+                const contentUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+                const contentRes = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                const json = await contentRes.json();
+
+                solutionsCache = json.solutions || [];
+                lastFetchTime = Date.now();
+                return solutionsCache!;
+            }
+        } catch (e) {
+            console.warn("Failed to load learnings from Drive:", e);
+        }
+    }
+
+    // 3. Fallback to Empty or keep existing stale cache
+    return solutionsCache || [];
 }
 
-// Save solutions to localStorage
-function saveSolutions(solutions: LearnedSolution[]): void {
+// Save solutions to Drive
+async function saveSolutions(accessToken: string, solutions: LearnedSolution[]): Promise<void> {
+    // Update Cache immediately
+    solutionsCache = solutions;
+    lastFetchTime = Date.now();
+
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ solutions }));
+        const rootId = await findOrCreateFolder(accessToken);
+
+        // Prepare File
+        const fileMetadata = {
+            name: LEARNING_FILE_NAME,
+            parents: [rootId]
+        };
+        const media = {
+            mimeType: 'application/json',
+            body: JSON.stringify({ solutions, lastUpdated: new Date().toISOString() })
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(fileMetadata)], { type: 'application/json' }));
+        form.append('file', new Blob([media.body], { type: 'application/json' }));
+
+        // Check for existing file to update
+        const query = `name='${LEARNING_FILE_NAME}' and '${rootId}' in parents and trashed=false`;
+        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+        const res = await fetch(searchUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        const data = await res.json();
+
+        if (data.files && data.files.length > 0) {
+            // PATCH
+            const fileId = data.files[0].id;
+            const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+            await fetch(updateUrl, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${accessToken}` },
+                body: form
+            });
+            console.log("Saved Oscar's Brain to Drive (Update)");
+        } else {
+            // POST
+            const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+            await fetch(uploadUrl, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${accessToken}` },
+                body: form
+            });
+            console.log("Saved Oscar's Brain to Drive (New)");
+        }
+
     } catch (error) {
-        console.error('Error saving learned solutions:', error);
+        console.error('Error saving learned solutions to Drive:', error);
     }
 }
 
@@ -49,10 +129,11 @@ function calculateConfidence(successCount: number): 'high' | 'medium' | 'low' {
 }
 
 // Record a new solution or increment existing one
-export function recordSolution(
+export async function recordSolution(
+    accessToken: string,
     solution: Omit<LearnedSolution, 'id' | 'successCount' | 'lastUsed' | 'confidence' | 'createdAt'>
-): void {
-    const solutions = getLearnedSolutions();
+): Promise<void> {
+    const solutions = await getLearnedSolutions(accessToken);
     const now = new Date().toISOString().split('T')[0];
 
     // Check if similar solution already exists
@@ -84,12 +165,14 @@ export function recordSolution(
         console.log('✅ New solution recorded');
     }
 
-    saveSolutions(solutions);
+    await saveSolutions(accessToken, solutions);
 }
 
 // Find learned solutions for a specific fault code
+// SYNC Wrapper for Cache Access (Helper for UI/Gemini that needs instant reply)
 export function findLearnedSolution(faultCode: string, model?: string): LearnedSolution[] {
-    const solutions = getLearnedSolutions();
+    // Uses In-Memory Cache ONLY
+    const solutions = solutionsCache || [];
     const codeLower = faultCode.toUpperCase();
 
     let filtered = solutions.filter(s => s.faultCode.toUpperCase() === codeLower);
@@ -115,19 +198,10 @@ export function findLearnedSolution(faultCode: string, model?: string): LearnedS
     return filtered;
 }
 
-// Get all solutions for a specific model
-export function getModelHistory(model: string): LearnedSolution[] {
-    const solutions = getLearnedSolutions();
-    const modelLower = model.toLowerCase();
-
-    return solutions
-        .filter(s => s.model.toLowerCase().includes(modelLower))
-        .sort((a, b) => new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime());
-}
-
 // Search learned solutions by symptoms or fix description
-export function searchLearnedSolutions(query: string): LearnedSolution[] {
-    const solutions = getLearnedSolutions();
+// Now Async to ensure latest data
+export async function searchLearnedSolutions(query: string, accessToken?: string): Promise<LearnedSolution[]> {
+    const solutions = await getLearnedSolutions(accessToken);
     const queryLower = query.toLowerCase();
 
     return solutions
@@ -142,7 +216,7 @@ export function searchLearnedSolutions(query: string): LearnedSolution[] {
 
 // Get statistics about learned solutions
 export function getLearningStats() {
-    const solutions = getLearnedSolutions();
+    const solutions = solutionsCache || [];
 
     const totalSolutions = solutions.length;
     const totalSuccesses = solutions.reduce((sum, s) => sum + s.successCount, 0);
@@ -173,12 +247,12 @@ export function getLearningStats() {
 
 // Export all learnings as JSON string for backup
 export function exportLearnings(): string {
-    const solutions = getLearnedSolutions();
+    const solutions = solutionsCache || [];
     return JSON.stringify({ solutions, exportedAt: new Date().toISOString() }, null, 2);
 }
 
 // Import learnings from JSON string
-export function importLearnings(jsonData: string): boolean {
+export async function importLearnings(jsonData: string, accessToken: string): Promise<boolean> {
     try {
         const data = JSON.parse(jsonData);
         if (!data.solutions || !Array.isArray(data.solutions)) {
@@ -186,7 +260,7 @@ export function importLearnings(jsonData: string): boolean {
             return false;
         }
 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ solutions: data.solutions }));
+        await saveSolutions(accessToken, data.solutions);
         console.log(`✅ Imported ${data.solutions.length} solutions`);
         return true;
     } catch (error) {
@@ -196,9 +270,11 @@ export function importLearnings(jsonData: string): boolean {
 }
 
 // Clear all learned solutions (use with caution!)
-export function clearAllLearnings(): void {
-    localStorage.removeItem(STORAGE_KEY);
-    console.log('🗑️ All learned solutions cleared');
+// Does NOT delete file from Drive, just clears cache and local ref. 
+// Implementation of Drive Clean needed if we want Full Wipe.
+export function clearInMemoryCache(): void {
+    solutionsCache = [];
+    console.log('🗑️ InMemory solutions cleared');
 }
 
 export type { LearnedSolution };

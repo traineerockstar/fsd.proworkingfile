@@ -4,13 +4,22 @@ export interface ProcessedData {
   notifications: string[];
 }
 
-export interface FaultCode {
-  errorCode: string;
-  productLine?: string; // 'washing_machine', etc.
-  sptoms?: string[];
-  fix: string;
-  successCount: number;
-  lastVerified: string; // ISO Date
+export interface FaultCodeEntry {
+  code: string;           // E.g. "E04"
+  description: string;    // "Drain Timeout"
+  solution: string;       // "Check filter..."
+  productLine?: string;   // "WashingMachine-X"
+  verified: boolean;      // Automated vs Manual
+  source: 'manual' | 'ai_learned' | 'bulletin';
+  timestamp: string;      // ISO Date
+}
+
+export interface KnowledgeDocument {
+  id: string; // Drive File ID
+  name: string;
+  mimeType: string;
+  webViewLink?: string;
+  tags?: string[];
 }
 
 export interface KnowledgeItem {

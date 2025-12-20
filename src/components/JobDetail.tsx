@@ -57,115 +57,141 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, onBack }) => {
             </AnimatePresence>
 
             {/* Dynamic Image Header */}
-            <div className="relative rounded-3xl overflow-hidden mb-8 border border-white/10 group">
+            <div className="relative rounded-3xl overflow-hidden mb-8 border border-white/10 group shadow-2xl">
                 {productImage && (
                     <div className="absolute inset-0">
-                        <img src={productImage} alt="Machine" className="w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+                        <img src={productImage} alt="Machine" className="w-full h-full object-cover opacity-60 group-hover:opacity-70 transition-opacity duration-700" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/80 to-transparent" />
                     </div>
                 )}
 
-                <div className="relative p-8 flex items-center gap-4 z-10">
+                <div className="relative p-8 flex items-center gap-6 z-10">
                     <button
                         onClick={onBack}
-                        className="p-3 bg-white/10 backdrop-blur-md border border-white/10 rounded-xl hover:bg-white/20 text-white transition-all shadow-lg"
+                        className="p-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl hover:bg-white/10 text-white transition-all hover:scale-105 active:scale-95"
                     >
-                        <ChevronLeft size={20} />
+                        <ChevronLeft size={24} />
                     </button>
                     <div>
-                        <h2 className="text-3xl font-black text-white tracking-tight drop-shadow-md">{job.customerName}</h2>
-                        <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
-                            <span className="uppercase tracking-wider">Job ID: {job.id}</span>
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                            <span className="capitalize">{job.priority} Priority</span>
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" />
+                                Job #{job.id}
+                            </div>
+                            {job.priority === 'high' && (
+                                <div className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-wider">
+                                    High Priority
+                                </div>
+                            )}
                         </div>
+                        <h2 className="text-4xl font-heading font-black text-white tracking-tight drop-shadow-lg mb-1">{job.customerName}</h2>
+                        <span className="text-slate-400 font-medium">Customer Profile</span>
                     </div>
                 </div>
             </div>
 
             <div className="grid lg:grid-cols-2 gap-6">
                 {/* Location & Schedule */}
-                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 space-y-4">
-                    <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-                        <MapPin size={18} className="text-cyan-400" /> Location
-                    </h3>
-                    <p className="text-slate-400 leading-relaxed">{job.address}</p>
-                    {job.travelTime && (
-                        <div className="flex items-center gap-3 mt-2 text-sm text-cyan-400 bg-cyan-500/10 p-3 rounded-lg border border-cyan-500/20">
-                            <span>🚗 {job.travelTime} drive</span>
-                            <button className="ml-auto px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-lg text-xs transition-colors">
-                                Start Route
-                            </button>
+                <div className="bg-[#0f0f0f]/60 backdrop-blur-xl border border-white/5 rounded-3xl p-8 space-y-6 hover:border-white/10 transition-colors">
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-heading font-bold text-white flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
+                                <MapPin size={20} />
+                            </div>
+                            Service Location
+                        </h3>
+                        <div className="pl-14">
+                            <p className="text-xl text-slate-200 font-medium leading-normal">{job.address}</p>
+                            {job.travelTime && (
+                                <div className="inline-flex items-center gap-3 mt-3 text-sm font-bold text-cyan-300 bg-cyan-950/30 px-4 py-2 rounded-xl border border-cyan-500/20">
+                                    <span>🚗 {job.travelTime} drive away</span>
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
 
-                    <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2 mt-6">
-                        <Clock size={18} className="text-cyan-400" /> Schedule
-                    </h3>
-                    <p className="text-slate-400">{job.timeSlot}</p>
+                    <div className="w-full h-px bg-white/5" />
+
+                    <div className="space-y-2">
+                        <h3 className="text-lg font-heading font-bold text-white flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+                                <Clock size={20} />
+                            </div>
+                            Appointment
+                        </h3>
+                        <div className="pl-14">
+                            <p className="text-xl text-slate-200 font-medium">{job.timeSlot}</p>
+                            <p className="text-sm text-slate-500 mt-1">Scheduled for Today</p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Fault Description */}
-                <div className="bg-gradient-to-br from-orange-500/10 to-red-600/10 border border-orange-500/20 rounded-3xl p-6">
-                    <h3 className="text-orange-400 font-bold flex items-center gap-2 mb-3">
-                        <Wrench size={18} /> Fault Description
+                <div className="bg-gradient-to-br from-rose-500/5 to-orange-500/5 border border-rose-500/10 rounded-3xl p-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 blur-[64px] rounded-full pointer-events-none" />
+
+                    <h3 className="text-rose-400 font-heading font-bold text-lg flex items-center gap-3 mb-4 relative z-10">
+                        <div className="p-2 rounded-xl bg-rose-500/10">
+                            <Wrench size={20} />
+                        </div>
+                        Reported Fault
                     </h3>
-                    <p className="text-slate-300 leading-relaxed">
-                        {job.engineerNotes || job.fault || "No fault description provided."}
+                    <p className="text-slate-200 text-lg leading-relaxed font-medium relative z-10 pl-14">
+                        "{job.engineerNotes || job.fault || "No specific fault description provided by customer."}"
                     </p>
                 </div>
 
                 {/* Machine Details */}
-                <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 space-y-4">
-                    <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-                        <Zap size={18} className="text-cyan-400" /> Machine Details
-                    </h3>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Product</label>
-                            <p className="text-white font-medium">{job.detectedProduct || job.modelNumber || "Unknown"}</p>
+                <div className="bg-[#0f0f0f]/60 backdrop-blur-xl border border-white/5 rounded-3xl p-8 space-y-6">
+                    <h3 className="text-lg font-heading font-bold text-white flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
+                            <Zap size={20} />
                         </div>
-                        <div>
-                            <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Serial Number</label>
+                        Machine Intelligence
+                    </h3>
+
+                    <div className="grid gap-6 pl-1 pt-2">
+                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-3">
+                            <div>
+                                <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block mb-1">Detected Product</label>
+                                <p className="text-lg text-white font-bold">{job.detectedProduct || job.modelNumber || "Unknown Device"}</p>
+                            </div>
+                            {job.brand && (
+                                <div>
+                                    <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block mb-1">Manufacturer</label>
+                                    <p className="text-slate-300 font-medium">{job.brand}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold ml-1">Serial Number</label>
                             <div className="flex gap-2">
                                 <input
                                     type="text"
                                     value={serialNumber}
                                     onChange={(e) => setSerialNumber(e.target.value)}
                                     placeholder="Scan or Enter Serial"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white font-mono focus:outline-none focus:border-cyan-500/50"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white font-mono focus:outline-none focus:border-cyan-500/50 focus:bg-white/5 transition-all placeholder:text-slate-600"
                                 />
                                 <button
                                     onClick={() => setIsScanning(true)}
-                                    className="p-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-xl transition-all"
+                                    className="px-4 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400 rounded-xl transition-all"
                                 >
                                     <Scan size={20} />
                                 </button>
                             </div>
                         </div>
-                        {job.brand && (
-                            <div>
-                                <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Brand</label>
-                                <p className="text-white font-medium">{job.brand}</p>
-                            </div>
-                        )}
-                        {job.purchaseDate && (
-                            <div>
-                                <label className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Purchase Date</label>
-                                <p className="text-white font-medium flex items-center gap-2">
-                                    <Calendar size={14} className="text-slate-500" />
-                                    {job.purchaseDate}
-                                </p>
-                            </div>
-                        )}
-                        <div>
-                            <label className="text-xs text-slate-500 uppercase tracking-wider block mb-2">Find a Part</label>
+
+                        <div className="pt-4 border-t border-white/5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block mb-3 ml-1">Quick Part Lookup</label>
                             <div className="relative group/search">
-                                <Package size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/search:text-cyan-400 transition-colors" />
+                                <Package size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/search:text-cyan-400 transition-colors" />
                                 <input
                                     type="text"
-                                    placeholder="Search part number or name..."
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:bg-white/10 focus:border-cyan-500/50 transition-all"
+                                    placeholder="Search part number..."
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:bg-white/5 focus:border-cyan-500/50 transition-all font-mono"
                                 />
                             </div>
                         </div>
@@ -174,14 +200,17 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job, onBack }) => {
 
                 {/* Parts Used */}
                 {job.partsUsed && job.partsUsed.length > 0 && (
-                    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
-                        <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2 mb-4">
-                            <Package size={18} className="text-emerald-400" /> Parts Used
+                    <div className="bg-[#0f0f0f]/60 backdrop-blur-xl border border-white/5 rounded-3xl p-8">
+                        <h3 className="text-lg font-heading font-bold text-white flex items-center gap-3 mb-6">
+                            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                                <Package size={20} />
+                            </div>
+                            Parts Consumed
                         </h3>
-                        <ul className="space-y-2">
+                        <ul className="space-y-3">
                             {job.partsUsed.map((part, idx) => (
-                                <li key={idx} className="flex items-center gap-2 text-slate-300 text-sm">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                                <li key={idx} className="flex items-center gap-3 text-slate-300 text-sm font-medium p-3 rounded-xl bg-white/5 border border-white/5">
+                                    <span className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]" />
                                     {part}
                                 </li>
                             ))}
