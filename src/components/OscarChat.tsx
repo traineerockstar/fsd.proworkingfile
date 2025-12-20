@@ -137,7 +137,7 @@ Fault: "${job?.engineerNotes || 'None'}"`,
                             <div>
                                 <h2 className="text-lg font-black tracking-wide uppercase">OSCAR | RAG</h2>
                                 <p className="text-xs opacity-80 font-mono">
-                                    Knowledge Base: {accessToken ? 'Active' : 'Offline'}
+                                    Knowledge Base: {accessToken === "mock-token" ? 'Demo Mode' : accessToken ? 'Active' : 'Offline'}
                                 </p>
                             </div>
                         </div>

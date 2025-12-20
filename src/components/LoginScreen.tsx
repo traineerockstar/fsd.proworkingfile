@@ -13,19 +13,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
     const login = useGoogleLogin({
         onSuccess: (tokenResponse) => {
-            console.log("Login Successful");
+            console.log("✅ Login Successful");
+            console.log("📋 Token Response:", tokenResponse);
+            console.log("🔑 Access Token:", tokenResponse.access_token);
             setIsLoading(true);
-            // Simulate a brief setup delay or validation
             setTimeout(() => {
+                console.log("🚀 Calling onLogin with token");
                 onLogin(tokenResponse.access_token);
                 setIsLoading(false);
             }, 1000);
         },
-        onError: () => {
+        onError: (error) => {
+            console.error("❌ Google Login Failed:", error);
             setError("Google Login Failed. Please try again.");
             setIsLoading(false);
         },
-        scope: 'https://www.googleapis.com/auth/drive.file'
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        flow: 'implicit'
     });
 
     return (

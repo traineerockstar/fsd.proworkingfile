@@ -5,7 +5,8 @@ import type { ProcessedData } from '../types';
 import { searchKnowledgeBase } from './googleDriveService';
 import { searchWeb } from './webSearchService';
 import { knowledgeService } from './knowledgeService';
-import { learningService } from './learningService';
+import { searchFaultCode, searchManual } from './localKnowledge';
+import { findLearnedSolution } from './learningService';
 
 
 const LAYOUT_ANALYSIS_LOGIC = `
@@ -281,7 +282,7 @@ export async function chatWithOscar(
   try {
     // 1. RAG: Search Knowledge Base
     let referenceMaterial = "";
-    if (accessToken) {
+    if (accessToken && accessToken !== "mock-token") {
       console.log("Oscar RAG: Searching Knowledge Base for:", message);
       const docs = await searchKnowledgeBase(accessToken, message);
       if (docs.length > 0) {
@@ -297,16 +298,17 @@ export async function chatWithOscar(
         }
       }
 
-      // 1c. Learning Service (Fault Codes)
+      // 1c. Learned Solutions (localStorage)
       if (jobContext.engineerNotes) {
         // Simple extraction: Look for "E" or "F" followed by digits (e.g., E24, F05)
         const codeMatch = jobContext.engineerNotes.match(/([E|F][0-9]+)/i);
         if (codeMatch) {
           const code = codeMatch[0].toUpperCase();
-          console.log(`Oscar: Detected Fault Code ${code}, checking Learning DB...`);
-          const fix = await learningService.findFix(accessToken, code);
-          if (fix) {
-            referenceMaterial += `\n\n### LEARNED SOLUTION FOR FAULT ${code} ###\nFix: ${fix.fix}\nSuccess Rate: ${fix.successCount} verified repairs.\nLast Verified: ${fix.lastVerified}`;
+          console.log(`Oscar: Detected Fault Code ${code}, checking Learned Solutions...`);
+          const learned = findLearnedSolution(code, jobContext.detectedProduct || jobContext.modelNumber);
+          if (learned.length > 0) {
+            const topSolution = learned[0];
+            referenceMaterial += `\n\n### 🌟 LEARNED SOLUTION FOR FAULT ${code} (${topSolution.confidence} confidence) ###\nFix: ${topSolution.fix}\nSuccess Rate: ${topSolution.successCount} verified repairs.\nLast Used: ${topSolution.lastUsed}\nParts: ${topSolution.partsUsed.join(', ')}`;
           }
         }
       }

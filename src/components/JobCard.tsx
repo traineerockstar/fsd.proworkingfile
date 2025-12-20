@@ -118,22 +118,9 @@ export const JobCard: React.FC<JobCardProps> = ({ job, index, onAskOscar, onPart
                     <div className="hidden" />
                 )}
 
-                {/* Tools Row */}
-                <div className="flex gap-2 pt-2">
-                    {/* Part Finder */}
-                    <div className="flex-1 relative group/search">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/search:text-white transition-colors" />
-                        <input
-                            type="text"
-                            placeholder="Find a part..."
-                            value={partQuery}
-                            onChange={(e) => setPartQuery(e.target.value)}
-                            onKeyDown={handlePartSearch}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:bg-white/10 focus:border-white/20 transition-all"
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                    </div>
 
+                {/* Tools Row */}
+                <div className="flex gap-2 pt-2 justify-end">
                     {/* Ask Oscar Advice Button */}
                     <button
                         onClick={handleOscarClick}

@@ -1,0 +1,117 @@
+{
+    "manuals": [
+        {
+            "model": "HOOVER TUMBLE DRYER",
+            "brand": "HOOVER",
+            "category": "dryer",
+            "faultCodes": {
+                "E01": "Door lock failure",
+                "E10": "Heating element failure",
+                "E20": "Motor failure"
+            },
+            "commonIssues": [
+                {
+                    "issue": "Not heating",
+                    "causes": [
+                        "Heating element failure",
+                        "Thermostat fault",
+                        "Thermal fuse blown"
+                    ],
+                    "diagnosis": "Check element resistance, test thermostat continuity",
+                    "solutions": [
+                        "Replace heating element",
+                        "Replace thermostat",
+                        "Replace thermal fuse"
+                    ]
+                },
+                {
+                    "issue": "Not starting",
+                    "causes": [
+                        "Door not closed properly",
+                        "Power supply issue",
+                        "Control board fault"
+                    ],
+                    "diagnosis": "Check door lock, verify power, inspect control board",
+                    "solutions": [
+                        "Adjust door alignment",
+                        "Check power outlet",
+                        "Replace control board"
+                    ]
+                }
+            ],
+            "parts": [
+                {
+                    "partNumber": "DL-4529",
+                    "name": "Door Lock Assembly",
+                    "price": "£25.99"
+                },
+                {
+                    "partNumber": "ELEMENT-2500",
+                    "name": "Heating Element 2500W",
+                    "price": "£45.00"
+                },
+                {
+                    "partNumber": "THERMOSTAT-T90",
+                    "name": "Thermostat 90°C",
+                    "price": "£12.50"
+                }
+            ]
+        },
+        {
+            "model": "CANDY WASHER",
+            "brand": "CANDY",
+            "category": "washing_machine",
+            "faultCodes": {
+                "E02": "Water fill issue",
+                "F05": "Pump blockage"
+            },
+            "commonIssues": [
+                {
+                    "issue": "Not draining",
+                    "causes": [
+                        "Blocked pump filter",
+                        "Faulty drain pump",
+                        "Kinked drain hose"
+                    ],
+                    "diagnosis": "Check pump filter for debris, inspect hose for blockages",
+                    "solutions": [
+                        "Clean pump filter",
+                        "Replace drain pump",
+                        "Straighten/replace hose"
+                    ]
+                },
+                {
+                    "issue": "Not filling with water",
+                    "causes": [
+                        "Blocked inlet filter",
+                        "Faulty inlet valve",
+                        "Low water pressure"
+                    ],
+                    "diagnosis": "Clean inlet filter, test valve operation",
+                    "solutions": [
+                        "Clean/replace filter",
+                        "Replace inlet valve",
+                        "Check water supply"
+                    ]
+                }
+            ],
+            "parts": [
+                {
+                    "partNumber": "IV-8800",
+                    "name": "Inlet Valve",
+                    "price": "£18.99"
+                },
+                {
+                    "partNumber": "PUMP-500",
+                    "name": "Drain Pump 50W",
+                    "price": "£32.00"
+                },
+                {
+                    "partNumber": "FILTER-03",
+                    "name": "Inlet Filter",
+                    "price": "£4.99"
+                }
+            ]
+        }
+    ]
+}

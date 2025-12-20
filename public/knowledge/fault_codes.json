@@ -1,0 +1,94 @@
+{
+    "codes": [
+        {
+            "code": "E01",
+            "description": "Door lock failure",
+            "models": [
+                "HOOVER TUMBLE DRYER",
+                "CANDY DRYER",
+                "HAIER DRYER"
+            ],
+            "diagnosis": "Check door closing mechanism and lock assembly for wear or damage",
+            "commonCauses": [
+                "Worn door lock",
+                "Misaligned door",
+                "Broken spring mechanism",
+                "Electrical fault"
+            ],
+            "fix": "Replace door lock assembly. Ensure door aligns correctly with lock. Test multiple cycles.",
+            "parts": [
+                "DL-4529"
+            ],
+            "difficulty": "medium",
+            "estimatedTime": "30-45 minutes"
+        },
+        {
+            "code": "E02",
+            "description": "Water fill issue",
+            "models": [
+                "HOOVER WASHING MACHINE",
+                "CANDY WASHER"
+            ],
+            "diagnosis": "Check water supply valves, inlet hose for kinks, and inlet valve filter for blockages",
+            "commonCauses": [
+                "Blocked inlet filter",
+                "Kinked hose",
+                "Low water pressure",
+                "Faulty inlet valve"
+            ],
+            "fix": "Clean inlet filter, straighten hose, verify water pressure. Replace inlet valve if faulty.",
+            "parts": [
+                "IV-8800",
+                "FILTER-03"
+            ],
+            "difficulty": "easy",
+            "estimatedTime": "15-30 minutes"
+        },
+        {
+            "code": "F05",
+            "description": "Pump blockage / drainage issue",
+            "models": [
+                "HOOVER WASHING MACHINE",
+                "CANDY WASHER",
+                "INDESIT WASHER"
+            ],
+            "diagnosis": "Check drain pump filter for blockages, inspect drain hose for kinks",
+            "commonCauses": [
+                "Blocked pump filter",
+                "Foreign object in pump",
+                "Kinked drain hose",
+                "Faulty pump"
+            ],
+            "fix": "Clean pump filter, remove any foreign objects, straighten drain hose. Replace pump if motor faulty.",
+            "parts": [
+                "PUMP-500",
+                "FILTER-PUMP"
+            ],
+            "difficulty": "medium",
+            "estimatedTime": "20-40 minutes"
+        },
+        {
+            "code": "E10",
+            "description": "Heating element failure",
+            "models": [
+                "HOOVER TUMBLE DRYER",
+                "CANDY DRYER"
+            ],
+            "diagnosis": "Test heating element resistance. Check thermostat and thermal fuse continuity.",
+            "commonCauses": [
+                "Burnt out element",
+                "Faulty thermostat",
+                "Blown thermal fuse",
+                "Wiring issue"
+            ],
+            "fix": "Replace heating element. Check and replace thermostat or thermal fuse if needed. Verify wiring connections.",
+            "parts": [
+                "ELEMENT-2500",
+                "THERMOSTAT-T90",
+                "FUSE-TF120"
+            ],
+            "difficulty": "hard",
+            "estimatedTime": "45-90 minutes"
+        }
+    ]
+}
