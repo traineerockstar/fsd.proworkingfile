@@ -27,16 +27,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen
       <div className="flex flex-col h-full bg-white px-4 py-8">
 
         {/* Brand Header */}
-        <div className="flex items-center justify-between mb-10 pl-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-xl">
-              S
-            </div>
-            <h1 className="text-xl font-heading font-bold text-slate-800 tracking-tight">
-              Service<span className="text-blue-500">HQ</span>
-            </h1>
+        <div className="flex items-center gap-3 mb-10 pl-2">
+          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
+            S
           </div>
-          <button onClick={onClose} className="md:hidden p-2 text-slate-400 hover:text-slate-600">
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            ServiceHQ
+          </h1>
+          <button onClick={onClose} className="md:hidden ml-auto p-2 text-slate-400 hover:text-slate-600">
             <SidebarLeftIcon />
           </button>
         </div>
@@ -49,9 +47,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onNavigate, isOpen
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-200 font-medium group relative ${isActive
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 font-medium group relative ${isActive
+                  ? 'bg-blue-50 text-blue-600'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
                   }`}
               >
                 {isActive && (

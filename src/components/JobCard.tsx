@@ -55,10 +55,10 @@ export const JobCard: React.FC<JobCardProps> = ({ job, index, onAskOscar, onPart
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
                     <Calendar size={14} />
-                    <span>{new Date(job.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     <span className="w-1 h-1 rounded-full bg-slate-300" />
                     <Clock size={14} />
-                    <span>{job.time}</span>
+                    <span>{job.timeSlot}</span>
                 </div>
                 {getStatusBadge(job.status)}
             </div>
@@ -66,11 +66,11 @@ export const JobCard: React.FC<JobCardProps> = ({ job, index, onAskOscar, onPart
             {/* Main Content */}
             <div>
                 <h3 className="text-lg font-heading font-bold text-slate-800 group-hover:text-[#00A0E9] transition-colors line-clamp-1">
-                    {job.customer.name}
+                    {job.customerName || 'Unknown Customer'}
                 </h3>
                 <div className="flex items-start gap-1.5 mt-1 text-slate-500 text-sm">
                     <MapPin size={16} className="shrink-0 mt-0.5" />
-                    <p className="line-clamp-2 leading-snug">{job.location.address}</p>
+                    <p className="line-clamp-2 leading-snug">{job.address || 'No location provided'}</p>
                 </div>
             </div>
 

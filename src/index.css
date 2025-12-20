@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   :root {
@@ -21,7 +19,7 @@
   }
 
   body {
-    @apply bg-[#F4F6F8] text-slate-800 antialiased font-sans selection:bg-blue-500/20 selection:text-blue-700;
+    @apply bg-[#F4F6F8] text-gray-800 antialiased font-sans selection:bg-blue-500/20 selection:text-blue-700;
     font-family: var(--font-body);
   }
 
@@ -32,7 +30,7 @@
   h5,
   h6 {
     font-family: var(--font-heading);
-    @apply text-slate-800 tracking-tight;
+    @apply text-gray-800 tracking-tight;
   }
 }
 
@@ -40,7 +38,7 @@
 
   /* ServiceHQ Cards */
   .card-classic {
-    @apply bg-white rounded-3xl shadow-sm border border-slate-100;
+    @apply bg-white rounded-3xl shadow-sm border border-gray-100;
   }
 
   .card-hover {
@@ -61,6 +59,6 @@
 
   /* Input Fields */
   .input-field {
-    @apply w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400;
+    @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400;
   }
 }

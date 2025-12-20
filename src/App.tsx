@@ -12,6 +12,7 @@ import { Toaster } from 'sonner';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
 
 const App: React.FC = () => {
+  console.log("App Component Rendering...");
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
 

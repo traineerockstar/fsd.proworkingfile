@@ -53,58 +53,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ accessToken, onLogout }) =
                     {/* Dashboard View */}
                     {activeView === 'dashboard' && (
                         <>
-                            {/* OVERLAPPING SUMMARY CARD */}
-                            <div className="card-classic p-6 flex flex-col gap-6 relative z-20">
-                                <div className="flex items-start justify-between border-b border-slate-100 pb-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-16 h-16 bg-slate-100 rounded-2xl border border-slate-200 flex items-center justify-center text-slate-400 font-bold text-xs">
-                                            LOGO
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-heading font-bold text-slate-800">Global Tech Services</h2>
-                                            <p className="text-sm text-slate-500">Field Operations</p>
-                                        </div>
+                            {/* ServiceHQ Dashboard Layout */}
+
+                            {/* FSD.PRO Header Card */}
+                            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100 mb-6 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-bold text-[10px] tracking-widest uppercase">
+                                        LOGO
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-800">FSD.PRO</h2>
+                                        <p className="text-sm text-slate-500 font-medium">Dashboard</p>
                                     </div>
                                 </div>
-
-                                <div className="flex items-center justify-around text-center">
-                                    <div>
-                                        <div className="text-3xl font-bold text-[#00A0E9]">7<span className="text-lg font-medium text-slate-400">hrs</span></div>
-                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Today</div>
-                                    </div>
-                                    <div className="w-px h-12 bg-slate-100" />
-                                    <div>
-                                        <div className="text-3xl font-bold text-[#00A0E9]">35<span className="text-lg font-medium text-slate-400">hrs</span></div>
-                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">This Week</div>
+                                <div className="flex gap-12 text-center pr-12">
+                                    {/* Placeholder for future sparklines or simplified metrics if needed, currently empty per design */}
+                                    <div className="hidden md:block">
+                                        <div className="h-8 w-px bg-slate-100 mx-auto mb-2"></div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">This Week</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* 2x2 STATS GRID */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
-                                    <span className="text-2xl font-bold text-slate-700">13</span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Unconfirmed</span>
-                                </div>
-                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
-                                    <span className="text-2xl font-bold text-rose-500">18</span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Completed</span>
-                                </div>
-                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
-                                    <span className="text-2xl font-bold text-emerald-500">2</span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">In-Progress</span>
-                                </div>
-                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-1">
-                                    <span className="text-2xl font-bold text-amber-500">4</span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Upcoming</span>
-                                </div>
+                            {/* 4-Column Stats Row */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                                {[
+                                    { label: 'SPO JOBs', value: '0' },
+                                    { label: 'Recall Jobs', value: '0' },
+                                    { label: 'Estimated Milage', value: '0' },
+                                    { label: 'Todays Jobs', value: '0' }
+                                ].map((stat, i) => (
+                                    <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center gap-2">
+                                        <span className="text-3xl font-bold text-slate-800">{stat.value}</span>
+                                        <div className="flex flex-col items-center gap-2">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</span>
+                                            <div className="w-8 h-1 bg-slate-100 rounded-full" />
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
 
                             {/* LAST ACTIVITIES */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between px-1">
                                     <h3 className="font-heading font-bold text-lg text-slate-700">Last Activities</h3>
-                                    <button className="text-sm font-bold text-slate-400 hover:text-[#00A0E9] flex items-center gap-1">
+                                    <button className="text-sm font-bold text-slate-400 hover:text-blue-500 flex items-center gap-1">
                                         View All <ArrowRight size={16} />
                                     </button>
                                 </div>
