@@ -8,6 +8,11 @@ import { searchWeb } from './webSearchService';
 import { knowledgeService } from './knowledgeService';
 import { searchFaultCode, searchManual } from './localKnowledge';
 import { findLearnedSolution } from './learningService';
+import { getDriveFolderStructure } from './driveConfig';
+import { embedText } from './embeddingService';
+import { search as vectorSearch } from './vectorStore';
+import { expandQuery, extractFaultCodes } from './queryService';
+import { trackAgentSelected, trackQueryProcessed, trackSourceFound, trackError } from './analyticsService';
 
 
 
@@ -203,18 +208,14 @@ if (!API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
+import { SERIAL_KNOWLEDGE_BASE } from './serialService';
+
 const KNOWLEDGE_BASE_LEGACY = `
 ### KNOWLEDGE BASE (Legacy for Sheet Analysis) ###
 System Identification Logic:
 - If the Brand Name is 'Haier', use System B.
 - If the first digit of the serial number is '3', use System A.
-System A: Data Rules for Hoover / Candy
-- Identifier: Full serial number is a continuous string of digits, beginning with '3'.
-- Serial Number Structure: Digits 1-8: Product Code. Digits 9-12: Date of Manufacture Code (YYWW).
-- Date of Manufacture: Production Year = (Digits 9-10) + 2000.
-System B: Data Rules for Haier Brand
-- Identifier: Brand Name is 'Haier'.
-- Date of Manufacture (from Serial): A=2010, B=2011, ..., H=2017.
+${SERIAL_KNOWLEDGE_BASE}
 `;
 
 
@@ -377,95 +378,358 @@ export async function classifyDocument(base64Image: string): Promise<{ docType: 
   }
 }
 
-export async function chatWithOscar(
-  message: string,
-  history: { role: string; parts: { text: string }[] }[],
+// --- MULTI-AGENT SYSTEM ---
+
+type AgentType = 'DISPATCHER' | 'ENGINEER' | 'SOURCER';
+
+interface OscarResponse {
+  text: string;
+  sources?: { type: 'drive' | 'web'; name: string; link: string }[];
+  agentType?: AgentType;
+  isDiagnostic?: boolean; // Flag to show "Did this work?" buttons
+}
+
+interface RAGContext {
+  referenceMaterial: string;
+  sourcesFound: { type: 'drive' | 'web'; name: string; link: string }[];
+}
+
+/**
+ * SHARED RAG ENGINE
+ * Builds context from Vector Store, Google Drive (Manuals/PDFs), and Learned Solutions.
+ * Used by both the Chat Agent and the Job Fault Analyzer.
+ */
+export async function buildRAGContext(
+  query: string,
   jobContext: any,
   accessToken: string
-): Promise<{ text: string; sources?: { type: 'drive' | 'web'; name: string; link: string }[] }> {
+): Promise<RAGContext> {
+  let referenceMaterial = "";
+  let sourcesFound: { type: 'drive' | 'web'; name: string; link: string }[] = [];
+
   try {
-    // 1. RAG: Search Knowledge Base
-    let referenceMaterial = "";
+    // 1. SEMANTIC SEARCH using vector store (if embeddings available)
+    try {
+      const expandedQuery = expandQuery(query);
+      console.log("Oscar RAG: Semantic search with expanded query:", expandedQuery);
+
+      const queryEmbedding = await embedText(expandedQuery);
+      if (queryEmbedding.length > 0) {
+        // Broad search
+        const semanticResults = await vectorSearch(queryEmbedding, 5);
+        if (semanticResults.length > 0) {
+          referenceMaterial += "\n\n### SEMANTIC SEARCH RESULTS ###";
+          for (const result of semanticResults) {
+            referenceMaterial += `\n\n--- [Score: ${result.score.toFixed(2)}] ${result.source}${result.pageNumber ? ` (p.${result.pageNumber})` : ''} ---\n${result.content}\n--- END ---`;
+            sourcesFound.push({ type: 'drive', name: `${result.source} (semantic)`, link: '#' });
+            trackSourceFound('drive', result.source);
+          }
+        }
+      }
+    } catch (embeddingError) {
+      console.warn("Semantic search unavailable, falling back to keyword search", embeddingError);
+    }
+
+    // 2. LEARNED SOLUTIONS (Prioritize Verified Fixes)
+    // Check both message/query and job context for fault codes
+    const faultSource = (query || '') + " " + (jobContext.engineerNotes || jobContext.faultDescription || '');
+    const allFaultCodes = [
+      ...extractFaultCodes(query),
+      ...extractFaultCodes(faultSource)
+    ];
+
+    for (const code of [...new Set(allFaultCodes)]) {
+      console.log(`Oscar: Checking Learned Solutions for Fault ${code}...`);
+      const learned = findLearnedSolution(code, jobContext.detectedProduct || jobContext.modelNumber);
+      if (learned.length > 0) {
+        const topSolution = learned[0];
+        // Special Header to guide LLM
+        referenceMaterial = `\n\n### 🌟 PROVEN FIELD FIX (Confidence: ${topSolution.confidence}) ###\nFault: ${topSolution.faultCode}\nModel: ${topSolution.model}\nDiagnosis: ${topSolution.diagnosis}\nFix: ${topSolution.fix}\nSuccess Rate: ${topSolution.successCount} verified repairs.\nParts Used: ${topSolution.partsUsed.join(', ')}\n### END PROVEN FIX ###\n\n` + referenceMaterial;
+
+        trackSourceFound('learned', code);
+      }
+    }
+
+    // 3. KEYWORD SEARCH via Google Drive (Manuals, PDFs)
     if (accessToken && accessToken !== "mock-token") {
-      console.log("Oscar RAG: Searching Knowledge Base for:", message);
-      const docs = await searchKnowledgeBase(accessToken, message);
-      if (docs.length > 0) {
-        referenceMaterial = "\n\n### REFERENCE MATERIAL (FROM KNOWLEDGE BASE) ###\n" + docs.join("\n\n");
+      const { searchAllKnowledgeFolders } = await import('./googleDriveService');
+
+      console.log("Oscar RAG: Keyword searching all knowledge folders for:", query);
+      const allDocs = await searchAllKnowledgeFolders(accessToken, query);
+
+      if (allDocs.length > 0) {
+        referenceMaterial += "\n\n### DRIVE KEYWORD SEARCH RESULTS ###";
+        for (const doc of allDocs) {
+          referenceMaterial += `\n\n--- SOURCE: ${doc.source} (from ${doc.folder}) ---\n${doc.content}\n--- END SOURCE ---`;
+          sourcesFound.push({ type: 'drive', name: `${doc.source} (${doc.folder})`, link: '#' });
+          trackSourceFound('drive', doc.folder);
+        }
       }
 
-
-      // 1b. Knowledge Service (Manuals)
+      // Manual Specific Lookup
       if (jobContext.modelNumber || jobContext.detectedProduct) {
         const manual = await knowledgeService.findManual(accessToken, jobContext.modelNumber || jobContext.detectedProduct);
         if (manual) {
           referenceMaterial += `\n\n### FOUND MANUAL: ${manual.title} ###\nURI: ${manual.url || 'Internal Drive'}`;
         }
       }
-
-      // 1c. Learned Solutions (localStorage)
-      if (jobContext.engineerNotes) {
-        // Simple extraction: Look for "E" or "F" followed by digits (e.g., E24, F05)
-        const codeMatch = jobContext.engineerNotes.match(/([E|F][0-9]+)/i);
-        if (codeMatch) {
-          const code = codeMatch[0].toUpperCase();
-          console.log(`Oscar: Detected Fault Code ${code}, checking Learned Solutions...`);
-          const learned = findLearnedSolution(code, jobContext.detectedProduct || jobContext.modelNumber);
-          if (learned.length > 0) {
-            const topSolution = learned[0];
-            referenceMaterial += `\n\n### 🌟 LEARNED SOLUTION FOR FAULT ${code} (${topSolution.confidence} confidence) ###\nFix: ${topSolution.fix}\nSuccess Rate: ${topSolution.successCount} verified repairs.\nLast Used: ${topSolution.lastUsed}\nParts: ${topSolution.partsUsed.join(', ')}`;
-          }
-        }
-      }
     }
+  } catch (err) {
+    console.error("Error building RAG context:", err);
+  }
 
-    // 2. Construct System Prompt
-    const systemPrompt = `
+  return { referenceMaterial, sourcesFound };
+}
+
+
+// DISPATCHER: Lightweight LLM call to route the query
+async function dispatcherAgent(message: string): Promise<'CHAT' | 'PARTS_LOOKUP' | 'DIAGNOSTIC'> {
+  const dispatcherPrompt = `
+You are a router. Classify the user's message into ONE of these categories:
+- PARTS_LOOKUP: If the user is asking for a specific part number, price, or availability.
+- DIAGNOSTIC: If the user is asking about a fault code, error, symptom, or asking "why is X happening?".
+- CHAT: Anything else (greetings, general questions, how-to, etc).
+
+Respond with ONLY the category name, nothing else.
+`;
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts: [{ text: message }] }],
+      config: {
+        systemInstruction: { parts: [{ text: dispatcherPrompt }] },
+      }
+    });
+    const result = (response.text || 'CHAT').trim().toUpperCase();
+    if (['PARTS_LOOKUP', 'DIAGNOSTIC', 'CHAT'].includes(result)) {
+      return result as 'CHAT' | 'PARTS_LOOKUP' | 'DIAGNOSTIC';
+    }
+    return 'CHAT';
+  } catch (e) {
+    console.warn("Dispatcher failed, defaulting to CHAT", e);
+    return 'CHAT';
+  }
+}
+
+// SOURCER AGENT: Returns strict JSON output for parts
+async function sourcerAgent(message: string, referenceMaterial: string): Promise<string> {
+  const sourcerPrompt = `
+You are a Parts Sourcer. You have access to the following reference material:
+${referenceMaterial}
+
+Your task: Find the specific part the user is asking about.
+If found, return a JSON object: {"partName": "...", "partNumber": "...", "price": "...", "found": true}
+If NOT found, return: {"found": false, "suggestion": "A short suggestion of where to look or ask."}
+
+IMPORTANT: Return ONLY the JSON object, no explanation or markdown.
+`;
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts: [{ text: message }] }],
+      config: {
+        systemInstruction: { parts: [{ text: sourcerPrompt }] },
+        responseMimeType: 'application/json',
+      }
+    });
+    const jsonResult = response.text || '{"found": false}';
+    // Format for user display
+    const parsed = JSON.parse(jsonResult);
+    if (parsed.found) {
+      return `✅ **Part Found**\n- **Name**: ${parsed.partName}\n- **Part Number**: \`${parsed.partNumber}\`\n- **Price**: ${parsed.price || 'N/A'}`;
+    } else {
+      return `❌ Part not found in the knowledge base.\n\n💡 **Suggestion**: ${parsed.suggestion || 'Check the OEM parts catalog.'}`;
+    }
+  } catch (e) {
+    console.error("Sourcer Agent Error", e);
+    return "I couldn't find that part. Please check the parts manual.";
+  }
+}
+
+// ENGINEER AGENT (Main Chat Logic)
+async function engineerAgent(
+  message: string,
+  history: { role: string; parts: { text: string }[] }[],
+  jobContext: any,
+  referenceMaterial: string,
+  isDiagnostic: boolean
+): Promise<string> {
+  const driveStructure = getDriveFolderStructure();
+
+  const systemPrompt = `
 You are Oscar, an expert Field Service Engineer Assistant.
-Your goal is to assist the engineer with technical questions, inventory checks, and diagnostics.
 
 CONTEXT:
 Current Job: ${jobContext.detectedProduct || jobContext.modelNumber || "Generic Unit"}
-Fault: ${jobContext.engineerNotes || "None"}
+Fault: ${jobContext.engineerNotes || jobContext.faultDescription || "None"}
 Serial: ${jobContext.serialNumber || "Unknown"}
+
+${driveStructure}
+
+${SERIAL_KNOWLEDGE_BASE}
 
 ${referenceMaterial}
 
 INSTRUCTIONS:
 1. Use the Reference Material above if relevant.
 2. If the user asks about a part, check if it's in the reference material (manuals/BOMs).
-3. If citing a "LEARNED SOLUTION", mention the Confidence Level (High/Medium/Low) and Success Count to the user.
-4. Be concise and professional.
+3. If citing a "LEARNED SOLUTION" or "PROVEN FIELD FIX", mention the Confidence Level and Success Count prominently.
+4. ${isDiagnostic ? 'Provide a clear diagnosis and fix. The user will be asked if this worked afterwards.' : 'Be helpful and concise.'}
+5. You have access to files in Google Drive. Manuals are stored in the MANUALS folder. If a user asks where something is stored, refer to the Drive structure.
 `;
 
-    // 3. Call Gemini (Using @google/genai SDK stateless pattern)
-    // Convert history to compatible format if needed (Role: 'user' | 'model')
-    const contents = [
-      ...history.map(h => ({
-        role: h.role === 'model' ? 'model' : 'user',
-        parts: h.parts
-      })),
-      { role: 'user', parts: [{ text: message }] }
-    ];
+  const contents = [
+    ...history.map(h => ({
+      role: h.role === 'model' ? 'model' : 'user',
+      parts: h.parts
+    })),
+    { role: 'user', parts: [{ text: message }] }
+  ];
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: contents,
-      config: {
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-      }
-    });
+  const response = await ai.models.generateContent({
+    model: 'gemini-1.5-flash',
+    contents: contents,
+    config: {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+    }
+  });
 
-    const text = response.text;
-    if (!text) throw new Error("No response from Gemini");
+  return response.text || "I couldn't process that request.";
+}
+
+
+export async function chatWithOscar(
+  message: string,
+  history: { role: string; parts: { text: string }[] }[],
+  jobContext: any,
+  accessToken: string
+): Promise<OscarResponse> {
+  const startTime = Date.now();
+
+  try {
+    // 1. DISPATCHER: Route the message
+    console.log("🤖 Oscar: Dispatching query...");
+    const dispatchStart = Date.now();
+    const intent = await dispatcherAgent(message);
+    trackAgentSelected(intent, message, Date.now() - dispatchStart);
+    console.log(`   -> Intent: ${intent}`);
+
+    // 2. SHARED RAG CONTEXT BUILDER
+    const { referenceMaterial, sourcesFound } = await buildRAGContext(message, jobContext, accessToken);
+
+    // 2c. CONVERSATION SUMMARIZATION (if history is long)
+    let workingHistory = history;
+    if (history.length > 10) {
+      console.log(`Oscar: Summarizing long conversation (${history.length} turns)...`);
+      // Keep last 4 turns, summarize the rest
+      const oldHistory = history.slice(0, -4);
+      const recentHistory = history.slice(-4);
+
+      const summaryText = oldHistory.map(h => `${h.role}: ${h.parts[0]?.text?.substring(0, 100)}`).join('\n');
+      workingHistory = [
+        { role: 'user', parts: [{ text: `[Previous conversation summary: ${summaryText.substring(0, 500)}...]` }] },
+        ...recentHistory
+      ];
+    }
+
+    // 3. ROUTE TO AGENT
+    let responseText = "";
+    let agentType: AgentType = 'ENGINEER';
+    const isDiagnostic = intent === 'DIAGNOSTIC';
+
+    if (intent === 'PARTS_LOOKUP') {
+      agentType = 'SOURCER';
+      responseText = await sourcerAgent(message, referenceMaterial);
+    } else {
+      agentType = 'ENGINEER';
+      responseText = await engineerAgent(message, workingHistory, jobContext, referenceMaterial, isDiagnostic);
+    }
+
+    // Track successful query
+    trackQueryProcessed(message, agentType, sourcesFound.length, responseText.length, Date.now() - startTime);
+
     return {
-      text: text,
-      sources: (accessToken && referenceMaterial) ? [{ type: 'drive', name: 'Knowledge Base', link: '#' }] : []
+      text: responseText,
+      sources: sourcesFound.length > 0 ? sourcesFound : [],
+      agentType: agentType,
+      isDiagnostic: isDiagnostic
     };
 
   } catch (error) {
     console.error("Oscar Chat Error:", error);
+    trackError('chat_error', error instanceof Error ? error.message : 'Unknown error');
     return { text: "I'm having trouble connecting to my knowledge base right now. Please try again." };
   }
 }
+
+// --- AUTOMATED FAULT ANALYSIS (PHASE 1) ---
+
+const FaultAnalysisSchema = {
+  type: Type.OBJECT,
+  properties: {
+    fault: { type: Type.STRING, description: "Short summary of the fault code or symptom" },
+    cause: { type: Type.STRING, description: "Technical root cause found in manuals/PDFs" },
+    solution: { type: Type.STRING, description: "Step-by-step fix or action plan" },
+    confidence: { type: Type.NUMBER, description: "Confidence score 0-100 based on source quality" }
+  },
+  required: ["fault", "cause", "solution", "confidence"]
+};
+
+export async function generateFaultDiagnosis(
+  job: any,
+  accessToken: string
+): Promise<{ fault: string; cause: string; solution: string; confidence: number } | null> {
+
+  if (!job.engineerNotes && !job.faultDescription) return null;
+
+  const query = `${job.engineerNotes} ${job.faultDescription}`;
+  console.log("🔍 Oscar: Auto-Analyzing Fault >", query);
+
+  // Reuse the Shared RAG Brain
+  const { referenceMaterial } = await buildRAGContext(query, job, accessToken);
+
+  if (!referenceMaterial) {
+    console.log("No context found for auto-analysis.");
+    return null; // Don't hallucinate if we know nothing
+  }
+
+  const prompt = `
+    You are an AI Diagnostic System. Analyze the fault based on the provided technical context.
+    
+    CONTEXT:
+    Product: ${job.detectedProduct}
+    Notes: ${query}
+
+    REFERENCE MATERIAL:
+    ${referenceMaterial}
+
+    INSTRUCTIONS:
+    1. Identify the likely Fault Code or Issue.
+    2. Determine the Root Cause from the evidence.
+    3. Outline the key Solution steps.
+    4. Rate validity (Confidence). If "PROVEN FIELD FIX" is present, Confidence = 100.
+    
+    Output strictly in JSON.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: FaultAnalysisSchema,
+      }
+    });
+
+    const result = JSON.parse(response.text || '{}');
+    return result;
+
+  } catch (e) {
+    console.error("Auto-Diagnosis Failed:", e);
+    return null;
+  }
+}
+
 
 

@@ -16,12 +16,12 @@ export const MessageCenter: React.FC<MessageCenterProps> = ({ onClose }) => {
     const activeJobs = jobs.filter(j => j.status !== 'completed');
 
     const generateMessage = (job: Job) => {
-        const date = new Date();
-        date.setDate(date.getDate() + 1); // "Tomorrow"
-        const dateStr = date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        // Use the job's timeSlot directly (matches Jobs Creator output)
+        const timeSlot = job.timeSlot || '08:00 - 10:00';
 
-        // "Hi [Name], this is FSD.PRO. We are scheduled to arrive tomorrow [Date] between [Time] for your [Product]. Please reply to confirm."
-        return `Hi ${job.customerName}, this is FSD.PRO. We are scheduled to arrive tomorrow, ${dateStr}, between ${job.timeSlot} for your ${job.detectedProduct || job.modelNumber || 'appliance'}. Please reply to confirm availability. Thanks!`;
+        return `Good evening, I am Matt, the Hoover/Candy engineer that will be coming to look at your appliance tomorrow. Your correct ETA is as follows: **${timeSlot}**
+
+Please note that this ETA is an estimate. Unforeseen traffic or changes in my daily schedule, such as cancellations, may mean I arrive slightly earlier or later. I will of course contact you if any significant changes to this estimate arise.`;
     };
 
     const handleCopy = (id: string, text: string) => {
@@ -72,8 +72,8 @@ export const MessageCenter: React.FC<MessageCenterProps> = ({ onClose }) => {
                                         <button
                                             onClick={() => handleCopy(job.id, message)}
                                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all ${isCopied
-                                                    ? 'bg-emerald-500 text-white'
-                                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                                                ? 'bg-emerald-500 text-white'
+                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
                                                 }`}
                                         >
                                             {isCopied ? <Check size={14} /> : <Copy size={14} />}

@@ -3,8 +3,9 @@ import { processFieldDataFromImages, classifyDocument } from './geminiService';
 import { listFilesInFolder, getFileBase64 } from './googleDriveService';
 import { Job } from '../context/JobContext';
 import { v4 as uuidv4 } from 'uuid';
+import { DRIVE_FOLDERS } from './driveConfig';
 
-const INPUT_FOLDER = 'INPUT_SCREENSHOTS';
+const INPUT_FOLDER = DRIVE_FOLDERS.INPUT_SCREENSHOTS;
 
 export const scanInputFolder = async (accessToken: string): Promise<any[]> => {
     // 1. List files in 'INPUT_SCREENSHOTS' inside FSD_PRO_DATA
@@ -77,13 +78,25 @@ export const processScheduleImages = async (accessToken: string, fileIds: string
     // The Gemini service returns a 'dataTable' string (markdown) and 'notifications'.
     // We need to parse that markdown table into Job objects.
 
-    return parseGeminiResponseToJobs(processedData);
+    const initialSchedule = parseGeminiResponseToJobs(processedData);
+
+    // 4. Enrich with Fault Analysis
+    const enrichedJobs = await enrichJobsWithAnalysis(initialSchedule.jobs, accessToken);
+
+    return { ...initialSchedule, jobs: enrichedJobs };
 };
 
-export const processManualScheduleImages = async (base64Images: string[]): Promise<StructuredSchedule> => {
+export const processManualScheduleImages = async (base64Images: string[], accessToken?: string): Promise<StructuredSchedule> => {
     // Direct processing for manual uploads
     const processedData = await processFieldDataFromImages(base64Images);
-    return parseGeminiResponseToJobs(processedData);
+    const initialSchedule = parseGeminiResponseToJobs(processedData);
+
+    if (accessToken) {
+        const enrichedJobs = await enrichJobsWithAnalysis(initialSchedule.jobs, accessToken);
+        return { ...initialSchedule, jobs: enrichedJobs };
+    }
+
+    return initialSchedule;
 };
 
 export const parseGeminiResponseToJobs = (data: any): StructuredSchedule => {
@@ -95,7 +108,31 @@ export const parseGeminiResponseToJobs = (data: any): StructuredSchedule => {
     let startTime = "08:00"; // Default start for first job
 
     // Extract date from root or fallback
-    const extractedDate = data.schedule_date || new Date().toISOString().split('T')[0];
+    let extractedDate = data.schedule_date || new Date().toISOString().split('T')[0];
+
+    // Validate Year Logic: fixing widely reported "wrong year" issue
+    try {
+        const dateObj = new Date(extractedDate);
+        const currentYear = new Date().getFullYear();
+        const extractedYear = dateObj.getFullYear();
+        const currentMonth = new Date().getMonth(); // 0-11
+        const extractedMonth = dateObj.getMonth();
+
+        // If extracted year is not current year
+        if (extractedYear !== currentYear) {
+            // Exception: If we are in Dec (11) and extracted is Jan (0), allow next year (currentYear + 1)
+            if (currentMonth === 11 && extractedMonth === 0 && extractedYear === currentYear + 1) {
+                // This is valid (next year)
+            } else {
+                // Otherwise force current year
+                console.warn(`[Ingestion] Correcting year from ${extractedYear} to ${currentYear}`);
+                dateObj.setFullYear(currentYear);
+                extractedDate = dateObj.toISOString().split('T')[0];
+            }
+        }
+    } catch (e) {
+        console.error("Error validating date:", e);
+    }
 
     const jobs = data.service_appointments.map((appt: any, index: number) => {
         // Calculate Time Slots (Naive Chain)
@@ -146,7 +183,42 @@ export const parseGeminiResponseToJobs = (data: any): StructuredSchedule => {
         return job;
     });
 
+    // 4. AUTO-DIAGNOSIS (Phase 1 AI)
+    // We can't await this inside the map lightly if it takes too long, 
+    // but for "Job Creation", users expect a spinner.
+    // Ideally we run this in parallel for all jobs.
+
+    // NOTE: This requires accessToken which we don't have here easily without modifying signature.
+    // TEMPORARY FIX: We will return the Jobs, and let the UI or Context trigger the enrichment.
+    // OR we pass token. 
+    // Looking at `processScheduleImages`, it HAS `accessToken`.
+    // But `parseGeminiResponseToJobs` is a pure function.
+    // Let's modify `processScheduleImages` to run the enrichment after parsing.
+
     return { jobs, date: extractedDate };
+};
+
+// HELPER: Enrich Jobs with AI Analysis
+export const enrichJobsWithAnalysis = async (jobs: Job[], accessToken: string): Promise<Job[]> => {
+    if (!accessToken) return jobs;
+
+    // Import dynamically to avoid circular deps if any
+    const { generateFaultDiagnosis } = await import('./geminiService');
+
+    console.log(`[@Ingestion-Agent]: Enriching ${jobs.length} jobs with AI Diagnosis...`);
+
+    const enrichedJobs = await Promise.all(jobs.map(async (job) => {
+        // Only analyze if there's something to analyze
+        if (job.engineerNotes && job.engineerNotes.length > 5) {
+            const analysis = await generateFaultDiagnosis(job, accessToken);
+            if (analysis) {
+                return { ...job, aiAnalysis: analysis };
+            }
+        }
+        return job;
+    }));
+
+    return enrichedJobs;
 };
 
 export const calculateGaps = (jobs: Job[]): { jobId: string, gapText: string }[] => {

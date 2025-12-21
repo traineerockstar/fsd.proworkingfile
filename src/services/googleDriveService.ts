@@ -1,9 +1,10 @@
 import { gapi } from 'gapi-script';
+import { DRIVE_FOLDERS, DRIVE_FILES } from './driveConfig';
 
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
-const APP_FOLDER_NAME = 'FSD_PRO_DATA';
+const APP_FOLDER_NAME = DRIVE_FOLDERS.ROOT;
 
 export interface DriveFile {
     id: string;
@@ -160,12 +161,14 @@ export const saveJobToDrive = async (accessToken: string, jobData: any) => {
             }
         }
 
-        // 3. Update Manifest (Atomic-ish)
+        // 3. Update Manifest DECOUPLED
+        // We no longer await this here. Manifest updates should be handled by a background process
+        // or a debounced queue to prevent blocking the UI and reducing write contention.
         if (fileId) {
-            await updateManifest(accessToken, {
-                ...jobData,
-                driveFileId: fileId
-            });
+            // For now, fire and forget (don't await) if we want semi-live updates, 
+            // OR completely remove if moving to pure periodic sync.
+            // implementation_plan says: "Remove the automatic updateManifest call".
+            // We will export logic to do it separately.
         }
 
         return fileId;
@@ -258,7 +261,7 @@ const saveManifest = async (accessToken: string, manifest: Manifest) => {
     }
 };
 
-const updateManifest = async (accessToken: string, job: JobSummary) => {
+export const updateManifest = async (accessToken: string, job: JobSummary) => {
     let manifest = await getManifest(accessToken);
     if (!manifest) {
         // If no manifest exists, we can't efficiently update it without a rebuild.
@@ -408,7 +411,7 @@ export const listJobsFromDrive = async (accessToken: string): Promise<any[]> => 
     }
 };
 
-const KNOWLEDGE_FOLDER_NAME = 'FSD_PRO_KNOWLEDGE';
+const KNOWLEDGE_FOLDER_NAME = DRIVE_FOLDERS.KNOWLEDGE;
 
 export const ensureKnowledgeFolder = async (accessToken: string): Promise<string> => {
     return findOrCreateFolderByName(accessToken, KNOWLEDGE_FOLDER_NAME);
@@ -492,8 +495,18 @@ export const searchKnowledgeBase = async (accessToken: string, queryText: string
                 const text = await res.text();
                 return `--- SOURCE: ${file.name} ---\n${text.substring(0, 2000)}\n--- END SOURCE ---`; // Truncate to save tokens
             } else if (file.mimeType === 'application/pdf') {
-                // For now, just cite the PDF existence as we don't have PDF parsing yet
-                return `--- SOURCE: ${file.name} (PDF Document Available) ---`;
+                // NEW: Parse PDF content using pdfService!
+                try {
+                    const { extractTextFromPdfTruncated } = await import('./pdfService');
+                    const contentUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+                    const res = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                    const blob = await res.blob();
+                    const pdfText = await extractTextFromPdfTruncated(blob, 8000); // 8k chars per PDF
+                    return `--- SOURCE: ${file.name} (PDF) ---\n${pdfText}\n--- END SOURCE ---`;
+                } catch (pdfError) {
+                    console.error(`Failed to parse PDF ${file.name}:`, pdfError);
+                    return `--- SOURCE: ${file.name} (PDF - Parse Failed) ---`;
+                }
             }
             return "";
         }));
@@ -504,3 +517,276 @@ export const searchKnowledgeBase = async (accessToken: string, queryText: string
         return [];
     }
 };
+
+/**
+ * COMPREHENSIVE SEARCH: Searches ALL knowledge-related folders
+ * - FSD_PRO_DATA/MANUALS
+ * - FSD_PRO_DATA/PART_LISTS
+ * - FSD_PRO_DATA/Error Code PDFs
+ * - FSD_PRO_DATA/Fault codes
+ * - FSD_PRO_KNOWLEDGE (root)
+ */
+export const searchAllKnowledgeFolders = async (
+    accessToken: string,
+    queryText: string,
+    options?: { includePartsLists?: boolean; includeErrorCodes?: boolean; includeFaultCodes?: boolean }
+): Promise<{ source: string; content: string; folder: string }[]> => {
+    const results: { source: string; content: string; folder: string }[] = [];
+    const opts = { includePartsLists: true, includeErrorCodes: true, includeFaultCodes: true, ...options };
+
+    console.log(`[Deep Search] Searching all knowledge folders for: "${queryText}"`);
+
+    try {
+        const rootId = await findOrCreateFolder(accessToken);
+
+        // Define folders to search
+        const foldersToSearch: { name: string; parentId: string; enabled: boolean }[] = [
+            { name: DRIVE_FOLDERS.MANUALS, parentId: rootId, enabled: true },
+            { name: DRIVE_FOLDERS.PART_LISTS, parentId: rootId, enabled: opts.includePartsLists },
+            { name: DRIVE_FOLDERS.ERROR_CODE_PDFS, parentId: rootId, enabled: opts.includeErrorCodes },
+            { name: DRIVE_FOLDERS.FAULT_CODES, parentId: rootId, enabled: opts.includeFaultCodes },
+        ];
+
+        // Search each folder
+        for (const folder of foldersToSearch) {
+            if (!folder.enabled) continue;
+
+            try {
+                const folderId = await findSubfolder(accessToken, folder.parentId, folder.name);
+
+                // Search for files containing the query
+                const query = `'${folderId}' in parents and (name contains '${queryText}' or fullText contains '${queryText}') and trashed=false`;
+                const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType)&pageSize=5`;
+
+                const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                const data = await response.json();
+
+                if (data.files && data.files.length > 0) {
+                    console.log(`[Deep Search] Found ${data.files.length} results in ${folder.name}`);
+
+                    // Process first 2 files from each folder
+                    for (const file of data.files.slice(0, 2)) {
+                        try {
+                            let content = '';
+
+                            if (file.mimeType === 'application/pdf') {
+                                const { extractTextFromPdfTruncated } = await import('./pdfService');
+                                const contentUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+                                const res = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                                const blob = await res.blob();
+                                content = await extractTextFromPdfTruncated(blob, 4000);
+                            } else if (file.mimeType.startsWith('text/') || file.mimeType === 'application/json' || file.name.endsWith('.md') || file.name.endsWith('.csv')) {
+                                const contentUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+                                const res = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                                content = (await res.text()).substring(0, 4000);
+                            }
+
+                            if (content) {
+                                results.push({
+                                    source: file.name,
+                                    content: content,
+                                    folder: folder.name
+                                });
+                            }
+                        } catch (fileErr) {
+                            console.warn(`[Deep Search] Could not read ${file.name}:`, fileErr);
+                        }
+                    }
+                }
+            } catch (folderErr) {
+                // Folder doesn't exist, skip
+                console.log(`[Deep Search] Folder ${folder.name} not found, skipping.`);
+            }
+        }
+
+        // Also search the separate Knowledge folder
+        try {
+            const knowledgeFolderId = await ensureKnowledgeFolder(accessToken);
+            const query = `'${knowledgeFolderId}' in parents and fullText contains '${queryText}' and trashed=false`;
+            const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType)&pageSize=3`;
+
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+            const data = await response.json();
+
+            if (data.files && data.files.length > 0) {
+                console.log(`[Deep Search] Found ${data.files.length} results in FSD_PRO_KNOWLEDGE`);
+                for (const file of data.files.slice(0, 2)) {
+                    try {
+                        let content = '';
+                        if (file.mimeType === 'application/pdf') {
+                            const { extractTextFromPdfTruncated } = await import('./pdfService');
+                            const contentUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+                            const res = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                            content = await extractTextFromPdfTruncated(await res.blob(), 4000);
+                        } else {
+                            const contentUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+                            const res = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                            content = (await res.text()).substring(0, 4000);
+                        }
+                        if (content) {
+                            results.push({ source: file.name, content, folder: 'FSD_PRO_KNOWLEDGE' });
+                        }
+                    } catch (e) { /* skip */ }
+                }
+            }
+        } catch { /* Knowledge folder doesn't exist */ }
+
+        console.log(`[Deep Search] Total results: ${results.length}`);
+        return results;
+
+
+    } catch (error) {
+        console.error("[Deep Search] Error:", error);
+        return [];
+    }
+};
+
+// --- SPO PARTS HELPERS ---
+
+export const exportSheetAsCsv = async (accessToken: string, fileId: string, mimeType?: string): Promise<string> => {
+
+    // STRATEGY: IF EXCEL, CONVERT TO TEMP GOOGLE SHEET FIRST
+    if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || mimeType === 'application/vnd.ms-excel') {
+        console.log(`[DriveService] Converting Excel (${fileId}) to temp Sheet for export...`);
+
+        // 1. Copy & Convert
+        const copyUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/copy`;
+        const metadata = {
+            mimeType: 'application/vnd.google-apps.spreadsheet',
+            name: `TEMP_CONVERT_${fileId}`
+        };
+        const copyRes = await fetch(copyUrl, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(metadata)
+        });
+
+        if (!copyRes.ok) throw new Error(`Failed to convert Excel file: ${copyRes.statusText}`);
+        const tempFile = await copyRes.json();
+        const tempId = tempFile.id;
+
+        try {
+            // 2. Recursive Call with new ID and "correct" mimeType
+            // We wait a brief moment for propagation? usually instant for copies.
+            return await exportSheetAsCsv(accessToken, tempId, 'application/vnd.google-apps.spreadsheet');
+        } finally {
+            // 3. Cleanup: Delete Temp File
+            console.log(`[DriveService] Cleaning up temp file ${tempId}...`);
+            await fetch(`https://www.googleapis.com/drive/v3/files/${tempId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+        }
+    }
+
+    // STANDARD EXPORT (Google Sheets)
+    const baseUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export`;
+    const params = new URLSearchParams({
+        mimeType: 'text/csv'
+    });
+
+    const response = await fetch(`${baseUrl}?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+        // Detailed error for debugging
+        const errText = await response.text();
+        throw new Error(`Failed to export sheet (${response.status}): ${errText}`);
+    }
+
+    return await response.text();
+};
+
+const SPO_TRACKING_FILE = 'spo_tracking.json';
+
+export const loadSPOTracking = async (accessToken: string): Promise<string[]> => {
+    try {
+        const rootId = await findOrCreateFolder(accessToken);
+        // Look for the file in FSD_PRO_DATA directly
+        const query = `name='${SPO_TRACKING_FILE}' and '${rootId}' in parents and trashed=false`;
+        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        const data = await res.json();
+
+        if (data.files && data.files.length > 0) {
+            const fileId = data.files[0].id;
+            const contentUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+            const contentRes = await fetch(contentUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+            const json = await contentRes.json();
+            return json.completedIds || [];
+        }
+    } catch (e) {
+        console.warn("Could not load SPO tracking", e);
+    }
+    return [];
+};
+
+export const saveSPOTracking = async (accessToken: string, completedIds: string[]) => {
+    try {
+        const rootId = await findOrCreateFolder(accessToken);
+        const fileName = SPO_TRACKING_FILE;
+        const content = { completedIds, lastUpdated: new Date().toISOString() };
+
+        // Check if exists
+        const query = `name='${fileName}' and '${rootId}' in parents and trashed=false`;
+        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`;
+        const res = await fetch(searchUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        const data = await res.json();
+
+        const fileId = (data.files && data.files.length > 0) ? data.files[0].id : null;
+
+        if (fileId) {
+            // Update existing file (Content Only) - simpler and more robust
+            const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+            const updateRes = await fetch(updateUrl, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(content)
+            });
+            if (!updateRes.ok) {
+                const errText = await updateRes.text();
+                throw new Error(`Failed to update tracking file: ${updateRes.status} ${errText}`);
+            }
+        } else {
+            // Create New
+            const metadata = {
+                name: fileName,
+                parents: [rootId],
+                mimeType: 'application/json'
+            };
+            await createFile(accessToken, metadata, content);
+        }
+    } catch (e) {
+        console.error("Error saving SPO tracking:", e);
+        throw e; // Propagate to caller
+    }
+};
+
+// --- GENERIC FILE HELPERS ---
+// Validated Export
+export const createFile = async (accessToken: string, metadata: any, content: any, contentType: string = 'application/json') => {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([typeof content === 'string' ? content : JSON.stringify(content)], { type: contentType }));
+
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: form
+    });
+    return await res.json();
+};
+
+export const readFileContent = async (accessToken: string, fileId: string): Promise<any> => {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    if (!res.ok) throw new Error("Failed to read file content");
+    return await res.json();
+};
+

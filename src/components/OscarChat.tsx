@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, X, Send, Wrench, Search, ShieldCheck, AlertCircle, ArrowRight, BookOpen, Layers, Globe, Database } from 'lucide-react';
+import { Bot, X, Send, Wrench, Search, ShieldCheck, AlertCircle, ArrowRight, BookOpen, Layers, Globe, Database, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Job } from '../context/JobContext';
 import { chatWithOscar } from '../services/geminiService';
+import { recordSolution } from '../services/learningService';
+import { toast } from 'sonner';
 
 // --- TYPES ---
 interface Message {
@@ -11,6 +13,8 @@ interface Message {
     sender: 'user' | 'oscar';
     timestamp: Date;
     sources?: { type: 'drive' | 'web', name: string, link: string }[];
+    isDiagnostic?: boolean; // For feedback buttons
+    feedbackGiven?: boolean; // Track if user already responded
 }
 
 interface OscarChatProps {
@@ -86,7 +90,8 @@ Fault: "${job?.engineerNotes || 'None'}"`,
                 text: result.text,
                 sender: 'oscar',
                 timestamp: new Date(),
-                sources: result.sources
+                sources: result.sources,
+                isDiagnostic: result.isDiagnostic
             };
 
             setMessages(prev => [...prev, oscarMsg]);
@@ -108,6 +113,38 @@ Fault: "${job?.engineerNotes || 'None'}"`,
             setMessages(prev => [...prev, errorMsg]);
         } finally {
             setIsTyping(false);
+        }
+    };
+
+    // FEEDBACK HANDLER
+    const handleFeedback = async (messageId: string, worked: boolean) => {
+        // Mark message as feedback given
+        setMessages(prev => prev.map(m =>
+            m.id === messageId ? { ...m, feedbackGiven: true } : m
+        ));
+
+        if (worked && accessToken && job) {
+            // Record the solution
+            const faultCode = (job.engineerNotes || job.faultDescription || '').match(/([E|F][0-9]+)/i)?.[0] || 'GENERAL';
+
+            toast.promise(
+                recordSolution(accessToken, {
+                    faultCode: faultCode.toUpperCase(),
+                    model: job.modelNumber || job.detectedProduct || 'Unknown',
+                    symptoms: job.faultDescription || job.engineerNotes || '',
+                    diagnosis: 'User verified fix via Oscar',
+                    fix: messages.find(m => m.id === messageId)?.text?.substring(0, 500) || 'See chat history',
+                    partsUsed: [],
+                    addedBy: 'Oscar AI'
+                }),
+                {
+                    loading: 'Recording solution...',
+                    success: '✅ Solution added to Oscar\'s memory!',
+                    error: 'Failed to record solution'
+                }
+            );
+        } else {
+            toast.info('Thanks for the feedback. Oscar will keep learning.');
         }
     };
 
@@ -191,6 +228,32 @@ Fault: "${job?.engineerNotes || 'None'}"`,
                                         </a>
                                     ))}
                                 </div>
+                            )}
+
+                            {/* FEEDBACK BUTTONS */}
+                            {msg.sender === 'oscar' && msg.isDiagnostic && !msg.feedbackGiven && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="flex items-center gap-2 mt-2"
+                                >
+                                    <span className="text-xs text-slate-400 mr-1">Did this help?</span>
+                                    <button
+                                        onClick={() => handleFeedback(msg.id, true)}
+                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30 transition-colors"
+                                    >
+                                        <ThumbsUp size={12} /> Yes
+                                    </button>
+                                    <button
+                                        onClick={() => handleFeedback(msg.id, false)}
+                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/30 transition-colors"
+                                    >
+                                        <ThumbsDown size={12} /> No
+                                    </button>
+                                </motion.div>
+                            )}
+                            {msg.feedbackGiven && (
+                                <span className="text-xs text-emerald-400 italic">Thanks for the feedback!</span>
                             )}
                         </div>
                     ))}

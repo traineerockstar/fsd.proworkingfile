@@ -8,7 +8,8 @@ interface BottomNavProps {
 
 export const BottomNav: React.FC<BottomNavProps> = ({ activeView, onNavigate }) => {
     return (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-6 py-2 pb-6 z-50 flex justify-between items-end shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex justify-between items-end pb-6 pt-3 px-6 
+                        bg-white/40 backdrop-blur-xl border-t border-white/40 shadow-[var(--shadow-glass)]">
             <NavItem
                 icon={<Home size={24} />}
                 label="Home"
@@ -24,15 +25,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeView, onNavigate }) 
             />
 
             {/* Central Floating Action Button */}
-            <div className="relative -top-6">
-                <button className="w-14 h-14 bg-[#00A0E9] rounded-full shadow-lg shadow-blue-500/30 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-all">
-                    <Plus size={28} strokeWidth={3} />
+            <div className="relative -top-8">
+                <button className="w-16 h-16 bg-[var(--color-primary)] rounded-full shadow-lg shadow-blue-500/40 flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-all outline-[6px] outline-transparent bg-clip-padding border-4 border-[var(--color-bg-app)]">
+                    <Plus size={32} strokeWidth={3} />
                 </button>
             </div>
 
             <NavItem
                 icon={<FileText size={24} />}
-                label="Document"
+                label="Jobs Creator"
                 isActive={activeView === 'jobs'}
                 onClick={() => onNavigate('jobs')}
             />

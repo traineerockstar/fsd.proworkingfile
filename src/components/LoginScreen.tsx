@@ -28,7 +28,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             setError("Google Login Failed. Please try again.");
             setIsLoading(false);
         },
-        scope: 'https://www.googleapis.com/auth/drive.file',
+        scope: 'https://www.googleapis.com/auth/drive',
         flow: 'implicit'
     });
 

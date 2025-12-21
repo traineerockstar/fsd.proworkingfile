@@ -1,6 +1,7 @@
 // Learning Service - Self-Improving Knowledge Base
 // Stores successful fixes in Google Drive (replacing localStorage) and retrieves them for future reference
 import { findOrCreateFolder, findSubfolder } from './googleDriveService';
+import { DRIVE_FOLDERS, DRIVE_FILES } from './driveConfig';
 
 interface LearnedSolution {
     id: string;
@@ -17,8 +18,8 @@ interface LearnedSolution {
     createdAt: string;
 }
 
-const LEARNING_FILE_NAME = 'learned_solutions.json';
-const APP_FOLDER_NAME = 'FSD_PRO_DATA';
+const LEARNING_FILE_NAME = DRIVE_FILES.OSCAR_BRAIN;
+const APP_FOLDER_NAME = DRIVE_FOLDERS.ROOT;
 
 // In-Memory Cache
 let solutionsCache: LearnedSolution[] | null = null;

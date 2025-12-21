@@ -6,50 +6,66 @@ interface TravelConnectorProps {
   origin?: string;
   destination?: string;
   index?: number; // Used for staggering API calls
+  routeResult?: RouteResult | null; // Pre-calculated route result
 }
 
-export const TravelConnector: React.FC<TravelConnectorProps> = ({ origin, destination, index = 0 }) => {
-  const [route, setRoute] = useState<RouteResult | null>(null);
-  const [loading, setLoading] = useState(true);
+export const TravelConnector: React.FC<TravelConnectorProps> = ({ origin, destination, index = 0, routeResult }) => {
+  const [route, setRoute] = useState<RouteResult | null>(routeResult || null);
+  const [loading, setLoading] = useState(!routeResult);
   const [failed, setFailed] = useState(false);
   const [missingAddress, setMissingAddress] = useState(false);
+
+  // Update local state if prop changes
+  useEffect(() => {
+    if (routeResult) {
+      setRoute(routeResult);
+      setLoading(false);
+      setFailed(false);
+    }
+  }, [routeResult]);
 
   const fallbackUrl = (origin && destination) ? getGoogleMapsUrl(origin, destination) : '#';
 
   useEffect(() => {
+    // If we already have a result passed in, no need to fetch
+    if (routeResult) {
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
     const STAGGER_DELAY_MS = 1200; // 1.2s delay per item to be safe with Nominatim limits
 
     if (!origin || !destination || origin.trim() === '' || destination.trim() === '') {
-        setMissingAddress(true);
-        setLoading(false);
-        return;
+      setMissingAddress(true);
+      setLoading(false);
+      return;
     } else {
-        setMissingAddress(false);
+      setMissingAddress(false);
     }
 
     const fetchRoute = async () => {
       // Stagger the request based on index
       await new Promise(r => setTimeout(r, index * STAGGER_DELAY_MS));
-      
+
       if (!isMounted) return;
 
       try {
         const result = await estimateTravelTime(origin, destination);
         if (isMounted) {
-            if (result) {
-                setRoute(result);
-                setFailed(false);
-            } else {
-                setFailed(true);
-            }
-            setLoading(false);
+          if (result) {
+            setRoute(result);
+            setFailed(false);
+          } else {
+            setFailed(true);
+          }
+          setLoading(false);
         }
       } catch (e) {
-          if (isMounted) {
-              setFailed(true);
-              setLoading(false);
-          }
+        if (isMounted) {
+          setFailed(true);
+          setLoading(false);
+        }
       }
     };
 
@@ -57,51 +73,50 @@ export const TravelConnector: React.FC<TravelConnectorProps> = ({ origin, destin
     fetchRoute();
 
     return () => { isMounted = false; };
-  }, [origin, destination, index]);
+  }, [origin, destination, index, routeResult]);
 
   // If we don't have addresses, we still show the connector line, but maybe a different badge or nothing
   if (missingAddress) {
-      return (
-        <div className="relative flex flex-col items-center py-3">
-            <div className="absolute inset-0 left-1/2 -ml-px w-0.5 border-l-2 border-dashed border-slate-800 h-full z-0"></div>
-            {/* Optional: Show a small dot or '?' if addresses are missing */}
-            <div className="relative z-10 w-2 h-2 rounded-full bg-slate-700"></div>
-        </div>
-      );
+    return (
+      <div className="relative flex flex-col items-center py-3">
+        <div className="absolute inset-0 left-1/2 -ml-px w-0.5 border-l-2 border-dashed border-slate-800 h-full z-0"></div>
+        {/* Optional: Show a small dot or '?' if addresses are missing */}
+        <div className="relative z-10 w-2 h-2 rounded-full bg-slate-700"></div>
+      </div>
+    );
   }
 
   return (
     <div className="relative flex flex-col items-center py-3">
       {/* Dotted Line */}
       <div className="absolute inset-0 left-1/2 -ml-px w-0.5 border-l-2 border-dashed border-slate-700 h-full z-0"></div>
-      
+
       {/* Badge */}
-      <a 
-        href={route?.googleMapsUrl || fallbackUrl} 
-        target="_blank" 
+      <a
+        href={route?.googleMapsUrl || fallbackUrl}
+        target="_blank"
         rel="noopener noreferrer"
-        className={`relative z-10 text-xs rounded-full px-3 py-1 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer group border ${
-            failed 
-            ? 'bg-amber-900/80 border-amber-700 text-amber-200 hover:bg-amber-800 hover:border-amber-500' 
+        className={`relative z-10 text-xs rounded-full px-3 py-1 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer group border ${failed
+            ? 'bg-amber-900/80 border-amber-700 text-amber-200 hover:bg-amber-800 hover:border-amber-500'
             : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-400 hover:text-cyan-300 hover:border-cyan-500'
-        }`}
+          }`}
         title="Click to open Google Maps navigation"
       >
         {loading ? (
-           <>
-             <span className="animate-spin">⏳</span>
-             <span>Calculating...</span>
-           </>
+          <>
+            <span className="animate-spin">⏳</span>
+            <span>Calculating...</span>
+          </>
         ) : failed ? (
-           <>
-             <span>⚠️</span>
-             <span className="font-semibold">Tap to Route</span>
-           </>
+          <>
+            <span>⚠️</span>
+            <span className="font-semibold">Tap to Route</span>
+          </>
         ) : (
-           <>
-             <span className="text-lg leading-none">🚗</span>
-             <span className="font-medium">{route?.durationText} <span className="opacity-50 mx-1">|</span> {route?.distanceText}</span>
-           </>
+          <>
+            <span className="text-lg leading-none">🚗</span>
+            <span className="font-medium">{route?.durationText} <span className="opacity-50 mx-1">|</span> {route?.distanceText}</span>
+          </>
         )}
       </a>
     </div>

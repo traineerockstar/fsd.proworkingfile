@@ -4,6 +4,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { Dashboard } from './components/Dashboard';
 import { Loader } from './components/Loader';
 import { JobProvider } from './context/JobContext';
+import { PrivacyProvider } from './context/PrivacyContext';
 import { AnimatePresence } from 'framer-motion';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from 'sonner';
@@ -13,6 +14,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_C
 
 const App: React.FC = () => {
   console.log("App Component Rendering...");
+  // TEMPORARY: Mock token for screenshot capture
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
 
@@ -42,14 +44,35 @@ const App: React.FC = () => {
         {!accessToken ? (
           <LoginScreen key="login" onLogin={handleLogin} />
         ) : (
-          <JobProvider accessToken={accessToken}>
-            <ErrorBoundary>
-              <Dashboard key="dashboard" />
-            </ErrorBoundary>
-          </JobProvider>
+          <PrivacyProvider>
+            <JobProvider accessToken={accessToken}>
+              <ErrorBoundary>
+                <Dashboard
+                  key="dashboard"
+                  accessToken={accessToken}
+                  onLogout={() => setAccessToken(null)}
+                />
+              </ErrorBoundary>
+            </JobProvider>
+          </PrivacyProvider>
         )}
       </AnimatePresence>
-      <Toaster position="top-right" theme="dark" />
+      <Toaster
+        position="top-right"
+        theme="light"
+        richColors
+        toastOptions={{
+          style: {
+            background: 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.5)',
+            borderRadius: '16px',
+            padding: '16px',
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+          },
+          className: 'font-sans'
+        }}
+      />
     </GoogleOAuthProvider>
   );
 };

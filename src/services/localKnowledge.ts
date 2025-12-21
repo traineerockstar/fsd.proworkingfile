@@ -36,6 +36,8 @@ interface KnowledgeBase {
     manuals: Manual[];
 }
 
+import { cacheFaultCodes, getCachedFaultCodes, cacheManual, getCachedManual, STORES, getCachedGeneral, cacheGeneral } from './offlineStorage';
+
 const knowledge: KnowledgeBase = {
     faultCodes: [],
     manuals: []
@@ -48,32 +50,65 @@ export async function initializeKnowledge(): Promise<void> {
     if (isInitialized) return;
 
     try {
-        console.log('📚 Loading local knowledge base...');
+        console.log('📚 Initializing knowledge base...');
 
-        const [faultCodesRes, manualsRes] = await Promise.all([
-            fetch('/knowledge/fault_codes.json'),
-            fetch('/knowledge/manuals.json')
-        ]);
+        // 1. Try to load from Offline Cache first
+        const cachedCodes = await getCachedFaultCodes();
+        const cachedManuals = await getCachedGeneral<Manual[]>('all_manuals'); // Storing manuals list in general cache for now
 
-        if (!faultCodesRes.ok || !manualsRes.ok) {
-            console.warn('⚠️ Knowledge files not found, using empty knowledge base');
+        if (cachedCodes && cachedManuals) {
+            console.log(`✅ Loaded knowledge from offline cache (${cachedCodes.length} codes, ${cachedManuals.length} manuals)`);
+            knowledge.faultCodes = cachedCodes;
+            knowledge.manuals = cachedManuals;
             isInitialized = true;
+
+            // Background refresh (optional: strictly offline-first means we might skip network if cache exists)
+            // For now, let's try to update in background without blocking
+            refreshKnowledgeFromNetwork().catch(err => console.warn('Background refresh failed', err));
             return;
         }
 
-        const faultCodesData = await faultCodesRes.json();
-        const manualsData = await manualsRes.json();
+        // 2. If no cache, fetch from network
+        await refreshKnowledgeFromNetwork();
 
-        knowledge.faultCodes = faultCodesData.codes || [];
-        knowledge.manuals = manualsData.manuals || [];
-
-        console.log(`✅ Loaded ${knowledge.faultCodes.length} fault codes and ${knowledge.manuals.length} manuals`);
-        isInitialized = true;
     } catch (error) {
         console.error('❌ Failed to load local knowledge:', error);
-        isInitialized = true; // Don't block app if knowledge fails to load
+        isInitialized = true; // Don't block app
     }
 }
+
+async function refreshKnowledgeFromNetwork(): Promise<void> {
+    console.log('🌐 Fetching knowledge from network...');
+
+    const [faultCodesRes, manualsRes] = await Promise.all([
+        fetch('/knowledge/fault_codes.json'),
+        fetch('/knowledge/manuals.json')
+    ]);
+
+    if (!faultCodesRes.ok || !manualsRes.ok) {
+        console.warn('⚠️ Knowledge files not found on server');
+        return;
+    }
+
+    const faultCodesData = await faultCodesRes.json();
+    const manualsData = await manualsRes.json();
+
+    const newCodes = faultCodesData.codes || [];
+    const newManuals = manualsData.manuals || [];
+
+    knowledge.faultCodes = newCodes;
+    knowledge.manuals = newManuals;
+    isInitialized = true;
+
+    // Update Cache
+    await Promise.all([
+        cacheFaultCodes(newCodes),
+        cacheGeneral('all_manuals', newManuals, 30 * 24 * 60 * 60 * 1000) // 30 days
+    ]);
+
+    console.log(`✅ Network sync complete: ${newCodes.length} codes, ${newManuals.length} manuals`);
+}
+
 
 // Search for a specific fault code
 export function searchFaultCode(code: string): FaultCode | undefined {
